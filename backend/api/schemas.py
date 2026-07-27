@@ -365,6 +365,23 @@ class QuizSubmissionResponse(ApiModel):
     enrichment_workflow_id: str | None = None
 
 
+class WeakTopicResponse(ApiModel):
+    topic: str
+    weakness_score: float = Field(ge=0)
+    recent_incorrect_count: int = Field(ge=0)
+    skipped_count: int = Field(ge=0)
+    active_signal_evidence_count: int = Field(ge=0)
+    latest_observed_at: str
+    source_document_ids: list[PublicId] = Field(default_factory=list)
+    evidence_summary: str
+    recommended_next_action: str
+
+
+class WeakTopicListResponse(ApiModel):
+    items: list[WeakTopicResponse]
+    total: int = Field(ge=0)
+
+
 MemoryType = Literal[
     "profile",
     "learning_state",

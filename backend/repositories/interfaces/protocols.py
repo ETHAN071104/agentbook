@@ -186,6 +186,13 @@ class QuizRepository(Protocol):
 
     def list_sources(self, question_attempt_id: int) -> list[Any]: ...
 
+    def list_weak_topics(
+        self,
+        *,
+        limit: int,
+        recent_days: int | None,
+    ) -> list[dict[str, Any]]: ...
+
 
 class LearnerMemoryRepository(Protocol):
     workspace_id: str

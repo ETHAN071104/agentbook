@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from backend.rag.database import get_connection
@@ -582,6 +582,191 @@ def list_quiz_question_sources(
         )
         for row in rows
     ]
+
+
+def list_weak_topics(
+    *,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
+    limit: int = 5,
+    recent_days: int | None = 30,
+) -> list[dict[str, object]]:
+    """Return bounded, workspace-safe weakness aggregates without private rows."""
+    cutoff = (
+        (
+            datetime.now(timezone.utc)
+            - timedelta(days=recent_days)
+        ).isoformat()
+        if recent_days is not None
+        else None
+    )
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            WITH recent_outcomes AS (
+                SELECT
+                    qqa.id AS question_attempt_id,
+                    qqa.workspace_id,
+                    qa.quiz_topic AS topic,
+                    qqa.skipped,
+                    (
+                        CASE WHEN qqa.skipped = 1 THEN 0.75 ELSE 1.0 END
+                    ) * (
+                        1.0 + 1.0 / (
+                            1.0 + MAX(
+                                0.0,
+                                (
+                                    julianday('now')
+                                    - julianday(qa.created_at)
+                                ) / 7.0
+                            )
+                        )
+                    ) AS outcome_weight,
+                    qa.created_at
+                FROM quiz_question_attempts AS qqa
+                JOIN quiz_attempts AS qa
+                  ON qa.id = qqa.quiz_attempt_id
+                 AND qa.workspace_id = qqa.workspace_id
+                WHERE qqa.workspace_id = ?
+                  AND qqa.presented = 1
+                  AND (qqa.skipped = 1 OR qqa.is_correct = 0)
+                  AND (? IS NULL OR qa.created_at >= ?)
+            ),
+            outcome_scores AS (
+                SELECT
+                    workspace_id,
+                    topic,
+                    SUM(CASE WHEN skipped = 0 THEN 1 ELSE 0 END)
+                        AS incorrect_count,
+                    SUM(CASE WHEN skipped = 1 THEN 1 ELSE 0 END)
+                        AS skipped_count,
+                    SUM(outcome_weight) AS outcome_score,
+                    MAX(created_at) AS last_outcome_at
+                FROM recent_outcomes
+                GROUP BY workspace_id, topic
+            ),
+            signal_scores AS (
+                SELECT
+                    workspace_id,
+                    topic,
+                    SUM(
+                        CASE
+                            WHEN status = 'active'
+                            THEN occurrence_count
+                            ELSE 0
+                        END
+                    ) AS active_signal_occurrences,
+                    SUM(
+                        CASE
+                            WHEN status = 'active' THEN 1.0
+                            WHEN status = 'improving' THEN -0.5
+                            ELSE 0.0
+                        END
+                        * occurrence_count
+                        * confidence
+                        * importance
+                        / (
+                            1.0 + MAX(
+                                0.0,
+                                (
+                                    julianday('now')
+                                    - julianday(last_observed_at)
+                                ) / 7.0
+                            )
+                        )
+                    ) AS signal_adjustment,
+                    MAX(last_observed_at) AS last_signal_at
+                FROM learning_signals
+                WHERE workspace_id = ?
+                  AND status IN ('active', 'improving')
+                  AND signal_type = 'knowledge_gap'
+                  AND topic <> ''
+                  AND (? IS NULL OR last_observed_at >= ?)
+                GROUP BY workspace_id, topic
+            ),
+            lineage AS (
+                SELECT
+                    ro.workspace_id,
+                    ro.topic,
+                    GROUP_CONCAT(DISTINCT d.id)
+                        AS source_document_public_ids
+                FROM recent_outcomes AS ro
+                JOIN quiz_question_sources AS qqs
+                  ON qqs.question_attempt_id = ro.question_attempt_id
+                 AND qqs.workspace_id = ro.workspace_id
+                JOIN documents AS d
+                  ON d.id = qqs.document_id
+                 AND d.workspace_id = qqs.workspace_id
+                WHERE qqs.chunk_index IS NOT NULL
+                GROUP BY ro.workspace_id, ro.topic
+            )
+            SELECT
+                os.topic,
+                MAX(
+                    0.0,
+                    os.outcome_score
+                        + 0.35 * COALESCE(ss.signal_adjustment, 0.0)
+                ) AS weakness_score,
+                os.incorrect_count,
+                os.skipped_count,
+                COALESCE(ss.active_signal_occurrences, 0)
+                    AS active_signal_occurrences,
+                CASE
+                    WHEN ss.last_signal_at IS NULL
+                      OR os.last_outcome_at >= ss.last_signal_at
+                    THEN os.last_outcome_at
+                    ELSE ss.last_signal_at
+                END AS last_observed_at,
+                l.source_document_public_ids
+            FROM outcome_scores AS os
+            LEFT JOIN signal_scores AS ss
+              ON ss.workspace_id = os.workspace_id
+             AND ss.topic = os.topic
+            LEFT JOIN lineage AS l
+              ON l.workspace_id = os.workspace_id
+             AND l.topic = os.topic
+            ORDER BY
+                weakness_score DESC,
+                last_observed_at DESC,
+                os.topic ASC
+            LIMIT ?
+            """,
+            (
+                workspace_id,
+                cutoff,
+                cutoff,
+                workspace_id,
+                cutoff,
+                cutoff,
+                limit,
+            ),
+        ).fetchall()
+    results: list[dict[str, object]] = []
+    for row in rows:
+        document_ids = (
+            tuple(
+                int(value)
+                for value in str(
+                    row["source_document_public_ids"]
+                ).split(",")
+                if value
+            )
+            if row["source_document_public_ids"]
+            else ()
+        )
+        results.append(
+            {
+                "topic": str(row["topic"]),
+                "weakness_score": float(row["weakness_score"]),
+                "incorrect_count": int(row["incorrect_count"]),
+                "skipped_count": int(row["skipped_count"]),
+                "active_signal_occurrences": int(
+                    row["active_signal_occurrences"]
+                ),
+                "last_observed_at": str(row["last_observed_at"]),
+                "source_document_public_ids": document_ids,
+            }
+        )
+    return results
             
 def insert_quiz_attempt_with_questions(
     *,

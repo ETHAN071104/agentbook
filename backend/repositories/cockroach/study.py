@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -498,8 +499,12 @@ class CockroachQuizRepository:
                 text(
                     """
                     SELECT q.*, a.public_id AS attempt_public_id
-                    FROM quiz_question_attempts q JOIN quiz_attempts a ON a.id=q.quiz_attempt_id
-                    WHERE q.workspace_id=:workspace_id AND a.public_id=:attempt_id
+                    FROM quiz_question_attempts q
+                    JOIN quiz_attempts a
+                      ON a.id=q.quiz_attempt_id
+                     AND a.workspace_id=q.workspace_id
+                    WHERE q.workspace_id=:workspace_id
+                      AND a.public_id=:attempt_id
                     ORDER BY q.question_number
                     """
                 ),
@@ -515,9 +520,14 @@ class CockroachQuizRepository:
                     SELECT src.*, q.public_id AS question_public_id,
                            d.public_id AS document_public_id
                     FROM quiz_question_sources src
-                    JOIN quiz_question_attempts q ON q.id=src.question_attempt_id
-                    LEFT JOIN documents d ON d.id=src.document_id
-                    WHERE src.workspace_id=:workspace_id AND q.public_id=:question_id
+                    JOIN quiz_question_attempts q
+                      ON q.id=src.question_attempt_id
+                     AND q.workspace_id=src.workspace_id
+                    LEFT JOIN documents d
+                      ON d.id=src.document_id
+                     AND d.workspace_id=src.workspace_id
+                    WHERE src.workspace_id=:workspace_id
+                      AND q.public_id=:question_id
                     ORDER BY src.source_index
                     """
                 ),
@@ -527,6 +537,208 @@ class CockroachQuizRepository:
                 },
             ).mappings().all()
         return [_quiz_source(row) for row in rows]
+
+    def list_weak_topics(
+        self,
+        *,
+        limit: int,
+        recent_days: int | None,
+    ) -> list[dict[str, Any]]:
+        cutoff = (
+            utc_now() - timedelta(days=recent_days)
+            if recent_days is not None
+            else None
+        )
+        recent_filter = (
+            "AND qqa.created_at >= :cutoff"
+            if cutoff is not None
+            else ""
+        )
+        signal_filter = (
+            "AND last_observed_at >= :cutoff"
+            if cutoff is not None
+            else ""
+        )
+        query = f"""
+            WITH recent_outcomes AS (
+                SELECT
+                    qqa.id AS question_attempt_id,
+                    qqa.workspace_id,
+                    qa.quiz_topic AS topic,
+                    qqa.skipped,
+                    (
+                        CASE
+                            WHEN qqa.skipped THEN 0.75::FLOAT8
+                            ELSE 1.0::FLOAT8
+                        END
+                    ) * (
+                        1.0::FLOAT8
+                        + 1.0::FLOAT8 / (
+                            1.0::FLOAT8
+                            + GREATEST(
+                                0.0::FLOAT8,
+                                EXTRACT(
+                                    EPOCH FROM (
+                                        current_timestamp()
+                                        - qqa.created_at
+                                    )
+                                )::FLOAT8 / 604800.0::FLOAT8
+                            )
+                        )
+                    ) AS outcome_weight,
+                    qqa.created_at
+                FROM quiz_question_attempts AS qqa
+                JOIN quiz_attempts AS qa
+                  ON qa.id = qqa.quiz_attempt_id
+                 AND qa.workspace_id = qqa.workspace_id
+                WHERE qqa.workspace_id = :workspace_id
+                  AND qqa.presented
+                  AND (qqa.skipped OR NOT qqa.is_correct)
+                  {recent_filter}
+            ),
+            outcome_scores AS (
+                SELECT
+                    workspace_id,
+                    topic,
+                    COUNT(*) FILTER (WHERE NOT skipped)
+                        AS incorrect_count,
+                    COUNT(*) FILTER (WHERE skipped)
+                        AS skipped_count,
+                    SUM(outcome_weight) AS outcome_score,
+                    MAX(created_at) AS last_outcome_at
+                FROM recent_outcomes
+                GROUP BY workspace_id, topic
+            ),
+            signal_scores AS (
+                SELECT
+                    workspace_id,
+                    topic,
+                    SUM(
+                        CASE
+                            WHEN status = 'active'
+                            THEN occurrence_count
+                            ELSE 0
+                        END
+                    ) AS active_signal_occurrences,
+                    SUM(
+                        CASE
+                            WHEN status = 'active' THEN 1.0::FLOAT8
+                            WHEN status = 'improving' THEN -0.5::FLOAT8
+                            ELSE 0.0::FLOAT8
+                        END
+                        * occurrence_count::FLOAT8
+                        * confidence
+                        * importance
+                        / (
+                            1.0::FLOAT8
+                            + GREATEST(
+                                0.0::FLOAT8,
+                                EXTRACT(
+                                    EPOCH FROM (
+                                        current_timestamp()
+                                        - last_observed_at
+                                    )
+                                )::FLOAT8 / 604800.0::FLOAT8
+                            )
+                        )
+                    ) AS signal_adjustment,
+                    MAX(last_observed_at) AS last_signal_at
+                FROM learning_signals
+                WHERE workspace_id = :workspace_id
+                  AND status IN ('active', 'improving')
+                  AND signal_type = 'knowledge_gap'
+                  AND topic <> ''
+                  {signal_filter}
+                GROUP BY workspace_id, topic
+            ),
+            lineage AS (
+                SELECT
+                    ro.workspace_id,
+                    ro.topic,
+                    ARRAY_AGG(DISTINCT d.public_id)
+                        AS source_document_public_ids
+                FROM recent_outcomes AS ro
+                JOIN quiz_question_sources AS qqs
+                  ON qqs.question_attempt_id = ro.question_attempt_id
+                 AND qqs.workspace_id = ro.workspace_id
+                JOIN document_chunks AS dc
+                  ON dc.id = qqs.document_chunk_id
+                 AND dc.workspace_id = qqs.workspace_id
+                JOIN documents AS d
+                  ON d.id = qqs.document_id
+                 AND d.workspace_id = qqs.workspace_id
+                 AND dc.document_id = d.id
+                GROUP BY ro.workspace_id, ro.topic
+            )
+            SELECT
+                os.topic,
+                GREATEST(
+                    0.0::FLOAT8,
+                    os.outcome_score
+                        + 0.35::FLOAT8
+                        * COALESCE(
+                            ss.signal_adjustment,
+                            0.0::FLOAT8
+                        )
+                ) AS weakness_score,
+                os.incorrect_count,
+                os.skipped_count,
+                COALESCE(ss.active_signal_occurrences, 0)
+                    AS active_signal_occurrences,
+                COALESCE(
+                    GREATEST(
+                        os.last_outcome_at,
+                        ss.last_signal_at
+                    ),
+                    os.last_outcome_at
+                ) AS last_observed_at,
+                COALESCE(
+                    l.source_document_public_ids,
+                    ARRAY[]::INT8[]
+                ) AS source_document_public_ids
+            FROM outcome_scores AS os
+            LEFT JOIN signal_scores AS ss
+              ON ss.workspace_id = os.workspace_id
+             AND ss.topic = os.topic
+            LEFT JOIN lineage AS l
+              ON l.workspace_id = os.workspace_id
+             AND l.topic = os.topic
+            ORDER BY
+                weakness_score DESC,
+                last_observed_at DESC,
+                os.topic ASC
+            LIMIT :limit
+        """
+        parameters: dict[str, object] = {
+            "workspace_id": UUID(self.workspace_id),
+            "limit": limit,
+        }
+        if cutoff is not None:
+            parameters["cutoff"] = cutoff
+        with connection_scope() as connection:
+            rows = connection.execute(
+                text(query),
+                parameters,
+            ).mappings().all()
+        return [
+            {
+                "topic": str(row["topic"]),
+                "weakness_score": float(row["weakness_score"]),
+                "incorrect_count": int(row["incorrect_count"]),
+                "skipped_count": int(row["skipped_count"]),
+                "active_signal_occurrences": int(
+                    row["active_signal_occurrences"]
+                ),
+                "last_observed_at": iso(row["last_observed_at"]),
+                "source_document_public_ids": tuple(
+                    int(value)
+                    for value in (
+                        row["source_document_public_ids"] or ()
+                    )
+                ),
+            }
+            for row in rows
+        ]
 
 
 def _session(row: Any) -> StoredStudySession:

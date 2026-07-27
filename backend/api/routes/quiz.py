@@ -13,10 +13,13 @@ from backend.api.schemas import (
     QuizSubmissionResponse,
     QuizSubmitRequest,
     SourceLineageResponse,
+    WeakTopicListResponse,
+    WeakTopicResponse,
 )
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Path, Query
 from typing import Annotated
 
+from backend.application.weak_topics import get_weak_topics
 from backend.rag.scope import RetrievalScope
 from backend.rag.notebooks import DocumentNotFoundError, NotebookNotFoundError
 from backend.rag.scope import TopicNotFoundError
@@ -51,6 +54,39 @@ def _scope_from_request(payload: QuizGenerateRequest) -> RetrievalScope | None:
     if payload.topic_id is not None:
         return RetrievalScope(topic_id=payload.topic_id)
     return None
+
+
+@router.get(
+    "/weak-topics",
+    response_model=WeakTopicListResponse,
+)
+def list_weak_topics(
+    limit: Annotated[int, Query(ge=1, le=5)] = 5,
+    recent_days: Annotated[int | None, Query(ge=1, le=365)] = 30,
+) -> WeakTopicListResponse:
+    topics = get_weak_topics(
+        limit=limit,
+        recent_days=recent_days,
+    )
+    return WeakTopicListResponse(
+        items=[
+            WeakTopicResponse(
+                topic=item.topic,
+                weakness_score=item.weakness_score,
+                recent_incorrect_count=item.recent_incorrect_count,
+                skipped_count=item.skipped_count,
+                active_signal_evidence_count=(
+                    item.active_signal_evidence_count
+                ),
+                latest_observed_at=item.latest_observed_at,
+                source_document_ids=list(item.source_document_ids),
+                evidence_summary=item.evidence_summary,
+                recommended_next_action=item.recommended_next_action,
+            )
+            for item in topics
+        ],
+        total=len(topics),
+    )
 
 
 @router.post(

@@ -312,6 +312,18 @@ class SQLiteQuizRepository:
             workspace_id=self.workspace_id,
         )
 
+    def list_weak_topics(
+        self,
+        *,
+        limit: int,
+        recent_days: int | None,
+    ) -> list[dict[str, Any]]:
+        return self._module().list_weak_topics(
+            workspace_id=self.workspace_id,
+            limit=limit,
+            recent_days=recent_days,
+        )
+
 
 class SQLiteLearnerMemoryRepository:
     def __init__(self, workspace_id: str = DEFAULT_WORKSPACE_ID) -> None:
