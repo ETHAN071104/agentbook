@@ -553,7 +553,7 @@ function MemoryCard({
           <ul>
             {memory.evidence.map((evidence, index) => (
               <li key={`${memory.id}-evidence-${index}`}>
-                {String(evidence.question ?? 'Recorded interaction')} — {String(evidence.outcome ?? 'observed')}
+                {String(evidence.question ?? 'Recorded interaction')} - {String(evidence.outcome ?? 'observed')}
               </li>
             ))}
           </ul>

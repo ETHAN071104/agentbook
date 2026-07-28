@@ -1,4 +1,5 @@
 import { Route, Routes } from "react-router-dom";
+import { GraduationCap } from "lucide-react";
 
 import { AppShell } from "./layouts";
 import {
@@ -23,7 +24,17 @@ export function App() {
       <Route
         element={
           <AppShell
-            footer={<p className="app-sidebar__note">Your private study space</p>}
+            footer={
+              <div className="app-sidebar__profile">
+                <span className="app-sidebar__avatar" aria-hidden="true">
+                  <GraduationCap size={19} />
+                </span>
+                <span className="app-sidebar__profile-copy">
+                  <strong>Private study space</strong>
+                  <span>Saved in this browser</span>
+                </span>
+              </div>
+            }
           />
         }
       >
