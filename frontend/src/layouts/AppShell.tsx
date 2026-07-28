@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  BarChart3,
   BookOpenText,
-  Brain,
+  Bot,
   ChevronLeft,
   ChevronRight,
-  LayoutDashboard,
+  ClipboardCheck,
+  House,
   Menu,
-  MessageCircle,
   NotebookTabs,
-  Settings,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -34,13 +32,11 @@ export interface AppShellProps {
 }
 
 export const DEFAULT_NAVIGATION: readonly NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/chat", label: "Chat", icon: MessageCircle },
-  { to: "/notebooks", label: "Notebooks", icon: NotebookTabs },
-  { to: "/study-actions", label: "Study actions", icon: Sparkles },
-  { to: "/progress", label: "Progress", icon: BarChart3 },
-  { to: "/memory", label: "Learner memory", icon: Brain },
-  { to: "/system", label: "System", icon: Settings },
+  { to: "/", label: "Home", icon: House, end: true },
+  { to: "/notebooks", label: "Library", icon: NotebookTabs },
+  { to: "/study-actions", label: "Practice", icon: Sparkles },
+  { to: "/agent", label: "Ask Agentbook", icon: Bot },
+  { to: "/tasks", label: "Tasks", icon: ClipboardCheck },
 ];
 
 function Navigation({
@@ -86,8 +82,8 @@ function Navigation({
 export function AppShell({
   children,
   navigation = DEFAULT_NAVIGATION,
-  brandName = "Study Companion",
-  brandSubtitle = "Your local learning workspace",
+  brandName = "Agentbook",
+  brandSubtitle = "Your private study space",
   footer,
 }: AppShellProps) {
   const location = useLocation();

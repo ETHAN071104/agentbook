@@ -80,7 +80,7 @@ describe('AI feature responsibility routing', () => {
     expect(
       await screen.findByText('Ask questions about your uploaded study materials. For weakness analysis, use Coaching.'),
     ).toBeTruthy();
-    expect(screen.getByText('Active source: All indexed documents')).toBeTruthy();
+    expect(screen.getByText('Active source: All study material')).toBeTruthy();
     await user.type(screen.getByLabelText('Your question'), prompt);
     await user.click(screen.getByRole('button', { name: 'Send question' }));
 
@@ -92,7 +92,7 @@ describe('AI feature responsibility routing', () => {
 
     expect(await screen.findByRole('heading', { name: 'Grounded coaching' })).toBeTruthy();
     expect(
-      screen.getByText('Uses your quiz mistakes, Learning Signals, and Learner Memories to decide what you should review.'),
+      screen.getByText('Uses your recent mistakes and study history to suggest what to review.'),
     ).toBeTruthy();
     expect(screen.getByText(prompt)).toBeTruthy();
     expect(document.querySelector('script')).toBeNull();

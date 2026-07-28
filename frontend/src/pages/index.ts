@@ -1,4 +1,5 @@
 export { ChatPage } from "./ChatPage";
+export { LearningAgentPage } from "./LearningAgentPage";
 export { DashboardPage } from "./DashboardPage";
 export { DocumentDetailPage } from "./DocumentDetailPage";
 export { MemoryPage } from "./MemoryPage";
@@ -7,5 +8,6 @@ export { NotebooksPage } from "./NotebooksPage";
 export { NotFoundPage } from "./NotFoundPage";
 export { ProgressPage } from "./ProgressPage";
 export { StudyActionsPage } from "./StudyActionsPage";
+export { StudyTasksPage } from "./StudyTasksPage";
 export { SystemPage } from "./SystemPage";
 export { TopicWorkspacePage } from "./TopicWorkspacePage";

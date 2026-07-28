@@ -4,6 +4,7 @@ import {
   FileText,
   FolderInput,
   FolderMinus,
+  MessageCircleQuestion,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -42,6 +43,13 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function formatFileType(mimeType: string) {
+  if (mimeType.includes("pdf")) return "PDF";
+  if (mimeType.includes("presentation")) return "Presentation";
+  if (mimeType.includes("text")) return "Text document";
+  return "Study material";
 }
 
 function isMissingSummary(error: unknown) {
@@ -234,28 +242,35 @@ export function DocumentDetailPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Indexed document"
+        eyebrow="Study material"
         title={record.filename}
-        description="Review metadata, change notebook membership, or generate a cited summary."
+        description="Ask a question, practise this source, or review its summary."
         actions={
           <div className="button-group">
+            <Link className="button button--primary" to="/chat">
+              <MessageCircleQuestion size={18} aria-hidden="true" />
+              <span>Ask about this</span>
+            </Link>
             <Link
               className="button button--secondary"
-              to={`/study-actions?document_ids=${record.id}&scope_name=${encodeURIComponent(record.filename)}`}
+              to={`/study-actions?view=quiz&document_ids=${record.id}&scope_name=${encodeURIComponent(record.filename)}`}
             >
               <BookOpenCheck size={18} aria-hidden="true" />
-              <span>Study document</span>
+              <span>Practice this</span>
             </Link>
-            <Button
-              variant="danger"
-              icon={<Trash2 size={18} aria-hidden="true" />}
-              onClick={() => {
-                deleteAction.reset();
-                setDeleteOpen(true);
-              }}
-            >
-              Delete document
-            </Button>
+            <details className="manage-menu">
+              <summary>Manage</summary>
+              <Button
+                variant="danger"
+                icon={<Trash2 size={18} aria-hidden="true" />}
+                onClick={() => {
+                  deleteAction.reset();
+                  setDeleteOpen(true);
+                }}
+              >
+                Delete material
+              </Button>
+            </details>
           </div>
         }
       />
@@ -263,26 +278,22 @@ export function DocumentDetailPage() {
       <div className="metadata-strip" aria-label="Document details">
         <div>
           <span>Type</span>
-          <strong>{record.mime_type}</strong>
+          <strong>{formatFileType(record.mime_type)}</strong>
         </div>
         <div>
-          <span>Chunks</span>
-          <strong>{record.chunk_count}</strong>
-        </div>
-        <div>
-          <span>Indexed</span>
+          <span>Added</span>
           <strong>{formatDate(record.created_at)}</strong>
         </div>
         <div>
-          <span>Updated</span>
-          <strong>{formatDate(record.updated_at)}</strong>
+          <span>Status</span>
+          <strong>Ready to study</strong>
         </div>
       </div>
 
       <section className="page-section">
         <SectionHeader
           title="Notebook assignment"
-          description="Moving this document changes SQLite membership only. Its embeddings are reused."
+          description="Move this material into a notebook, or leave it in Unsorted."
         />
         <Card>
           <div className="assignment-current">
@@ -294,7 +305,7 @@ export function DocumentDetailPage() {
                   {currentNotebook?.name ?? `Notebook ${record.notebook_id}`}
                 </Link>
               ) : (
-                <Link to="/notebooks/unsorted">Unsorted Documents</Link>
+                <Link to="/notebooks/unsorted">Unsorted</Link>
               )}
             </div>
           </div>
@@ -313,7 +324,7 @@ export function DocumentDetailPage() {
                   assignAction.reset();
                 }}
               >
-                <option value="unsorted">Unsorted Documents</option>
+                <option value="unsorted">Unsorted</option>
                 {notebooks.data?.items.map((notebook) => (
                   <option key={notebook.id} value={notebook.id ?? ""}>
                     {notebook.name}
@@ -338,7 +349,7 @@ export function DocumentDetailPage() {
                   disabled={assignAction.isPending}
                   onClick={() => void handleRemoveFromNotebook()}
                 >
-                  Remove to Unsorted
+                  Move to Unsorted
                 </Button>
               ) : null}
             </div>
@@ -363,7 +374,7 @@ export function DocumentDetailPage() {
       <section className="page-section">
         <SectionHeader
           title="Document summary"
-          description="Cached summary reads are model-free. Generation runs only when you request it."
+          description="Generate a short, cited overview when you need supporting information."
           actions={
             <Button
               icon={
@@ -397,7 +408,7 @@ export function DocumentDetailPage() {
             <EmptyState
               compact
               title="No summary generated"
-              description="Generate one when this document contains enough indexed evidence."
+              description="Generate one when this material contains enough supporting information."
               icon={<FileText />}
             />
           )}
@@ -419,14 +430,14 @@ export function DocumentDetailPage() {
         title="Delete this document?"
         description={
           <>
-            <strong>{record.filename}</strong> and its SQLite/Chroma records will be
-            removed with coordinated compensation. This action cannot be undone.
+            <strong>{record.filename}</strong> will be permanently removed from
+            your Library. This action cannot be undone.
             {deleteAction.error ? (
               <Notice tone="error">{getErrorMessage(deleteAction.error)}</Notice>
             ) : null}
           </>
         }
-        confirmLabel="Delete document"
+        confirmLabel="Delete material"
         destructive
         loading={deleteAction.isPending}
       />

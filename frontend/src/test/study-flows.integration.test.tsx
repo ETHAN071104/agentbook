@@ -170,7 +170,7 @@ describe("recoverable study workflows", () => {
     expect(
       await screen.findByRole("heading", { name: "Which molecule captures light?" }),
     ).toBeTruthy();
-    expect(screen.getByText("All indexed documents")).toBeTruthy();
+    expect(screen.getByText("All study material")).toBeTruthy();
     expect(screen.getByText("Standard quiz")).toBeTruthy();
     expect(document.body.textContent).not.toContain(secretExplanation);
     expect(document.body.textContent).not.toContain("Correct option:");
@@ -195,7 +195,7 @@ describe("recoverable study workflows", () => {
     expect(JSON.stringify(submitted)).not.toContain("explanation");
 
     await user.click(screen.getByRole("button", { name: "Start another quiz" }));
-    expect(screen.getByText("Questions may use any of your indexed documents.")).toBeTruthy();
+    expect(screen.getByText("Questions may use any material in your Library.")).toBeTruthy();
   });
 
   it("keeps quiz scope visible while sources resolve and after generation", async () => {
@@ -226,7 +226,7 @@ describe("recoverable study workflows", () => {
 
     await user.click(await screen.findByRole("tab", { name: "Quiz" }));
     expect(screen.getByText("plants.pdf")).toBeTruthy();
-    expect(screen.getByText("Questions will use only the indexed document “plants.pdf”.")).toBeTruthy();
+    expect(screen.getByText('Questions will use only "plants.pdf".')).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Generate quiz" }));
     expect(await screen.findByText("Resolving sources")).toBeTruthy();
 
@@ -253,7 +253,7 @@ describe("recoverable study workflows", () => {
       ],
     }));
 
-    expect(await screen.findByText("Adaptive quiz")).toBeTruthy();
+    expect(await screen.findByText("Personalized quiz")).toBeTruthy();
     expect(screen.getByText("Relevant learner history applied")).toBeTruthy();
   });
 
@@ -267,7 +267,7 @@ describe("recoverable study workflows", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("heading", { name: "Study scope needs attention" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Selected material needs attention" })).toBeTruthy();
     expect(screen.getAllByText(/more than one quiz scope/i)).toHaveLength(2);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -308,6 +308,6 @@ describe("recoverable study workflows", () => {
 
     expect(await screen.findByText(/No study material is available/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Choose or upload study material" })).toBeTruthy();
-    expect(screen.getByText("Questions may use any of your indexed documents.")).toBeTruthy();
+    expect(screen.getByText("Questions may use any material in your Library.")).toBeTruthy();
   });
 });

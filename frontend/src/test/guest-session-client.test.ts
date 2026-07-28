@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { api } from '../api/endpoints';
 import { apiClient, setGuestSessionToken } from '../api/client';
 
 
@@ -48,5 +49,38 @@ describe('guest-session request boundary', () => {
     const headers = new Headers(fetchMock.mock.calls.at(0)?.[1]?.headers);
     expect(headers.has('Authorization')).toBe(false);
     expect(headers.get('Idempotency-Key')).toBe('A'.repeat(32));
+  });
+
+  it('uses one bearer session for dashboard, library, upload, and tasks', async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => response(),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    setGuestSessionToken('canonical-session-credential');
+
+    await api.getDashboard(5, { cacheTtlMs: 0 });
+    await api.listNotebooks(undefined, { cacheTtlMs: 0 });
+    await api.uploadDocument(
+      new File(['safe'], 'safe.txt', { type: 'text/plain' }),
+    );
+    await api.listDocuments({}, { cacheTtlMs: 0 });
+    await api.createStudyTask(
+      {
+        title: 'Safe task',
+        description: '',
+        topic: '',
+        priority: 'normal',
+      },
+      'canonical-task-key-0001',
+    );
+    await api.listStudyTasks({}, { cacheTtlMs: 0 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    for (const [, init] of fetchMock.mock.calls) {
+      const headers = new Headers(init?.headers);
+      expect(headers.get('Authorization')).toBe(
+        'Bearer canonical-session-credential',
+      );
+    }
   });
 });

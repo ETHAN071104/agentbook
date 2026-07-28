@@ -25,6 +25,9 @@ from backend.repositories.cockroach.study import (
     CockroachQuizRepository,
     CockroachStudySessionRepository,
 )
+from backend.repositories.cockroach.study_tasks import (
+    CockroachStudyTaskRepository,
+)
 from backend.repositories.cockroach.unit_of_work import (
     CockroachUnitOfWork,
     sqlstate_from_exception,
@@ -48,6 +51,7 @@ __all__ = [
     "CockroachNotebookRepository",
     "CockroachQuizRepository",
     "CockroachStudySessionRepository",
+    "CockroachStudyTaskRepository",
     "CockroachUnitOfWork",
     "CockroachVectorOutboxRepository",
     "CockroachWorkflowStateRepository",

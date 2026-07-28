@@ -138,7 +138,7 @@ export function ChatPage() {
       ? (latestSessionId ?? storedActiveSessionId ?? null)
       : null;
   const selectedScopeLabel = useMemo(() => {
-    if (scopeKind === "global") return "All indexed documents";
+    if (scopeKind === "global") return "All study material";
     if (!scopeValue) return "Choose a source";
     if (scopeKind === "notebook") {
       return (
@@ -245,7 +245,7 @@ export function ChatPage() {
           <Card>
             <h2 id="chat-scope-heading">Answer scope</h2>
             <p className="muted-copy">
-              Scope is applied before retrieval. Empty scopes never fall back globally.
+              Choose all material or a specific source before you ask.
             </p>
             <div className="field-stack">
               <label htmlFor="chat-scope-kind">Source type</label>
@@ -305,7 +305,7 @@ export function ChatPage() {
                       : null}
                   </select>
                   <p id="chat-scope-help" className="field-help">
-                    Answers use only matching cited chunks.
+                    Answers use only matching cited passages.
                   </p>
                 </>
               ) : null}
@@ -440,7 +440,7 @@ export function ChatPage() {
                               <Lightbulb size={20} aria-hidden="true" />
                               <div>
                                 <h3 id={`proposal-${proposal.proposal_id}`}>
-                                  Proposed learner memory
+                                  Suggested study note
                                 </h3>
                                 <Badge tone="info">{proposal.memory_type}</Badge>
                               </div>

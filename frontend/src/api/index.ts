@@ -23,14 +23,20 @@ export {
   guestSessionApi,
   healthApi,
   intelligenceApi,
+  learningAgentApi,
   memoryApi,
   notebookApi,
   quizApi,
   reportApi,
   sessionApi,
   studyActionApi,
+  studyTaskApi,
   systemApi,
 } from './endpoints';
-export type { DocumentListFilters, ReviewQueueFilters } from './endpoints';
+export type {
+  DocumentListFilters,
+  ReviewQueueFilters,
+  StudyTaskFilters,
+} from './endpoints';
 export { isPublicId, PUBLIC_ID_PATTERN } from './publicIds';
 export type * from './types';

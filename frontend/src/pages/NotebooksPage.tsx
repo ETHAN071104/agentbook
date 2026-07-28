@@ -61,8 +61,6 @@ function parseNotebookValue(value: string) {
 export function NotebooksPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [documentSearchInput, setDocumentSearchInput] = useState("");
-  const [documentSearch, setDocumentSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createDescription, setCreateDescription] = useState("");
@@ -80,8 +78,8 @@ export function NotebooksPage() {
   const notebooks = useApiQuery(["notebooks", search], (signal) =>
     api.listNotebooks(search || undefined, { signal }),
   );
-  const documents = useApiQuery(["documents", documentSearch], (signal) =>
-    api.listDocuments({ q: documentSearch || undefined }, { signal }),
+  const documents = useApiQuery(["documents", search], (signal) =>
+    api.listDocuments({ q: search || undefined }, { signal }),
   );
   const notebookOptions = useApiQuery(["notebooks", "assignment-options"], (signal) =>
     api.listNotebooks(undefined, { signal }),
@@ -203,13 +201,13 @@ export function NotebooksPage() {
   }
 
   if (notebooks.isLoading && !notebooks.data) {
-    return <LoadingState message="Loading notebooks…" />;
+    return <LoadingState message="Loading your Library…" />;
   }
 
   if (notebooks.error && !notebooks.data) {
     return (
       <ErrorState
-        title="Notebook library unavailable"
+        title="Library unavailable"
         message={getErrorMessage(notebooks.error)}
         onRetry={notebooks.retry}
       />
@@ -220,59 +218,80 @@ export function NotebooksPage() {
 
   const notebookItems = notebooks.data.items;
   const assignmentNotebooks = notebookOptions.data?.items ?? notebookItems;
+  const documentItems = documents.data?.items ?? [];
+  const documentGroups = [
+    {
+      id: "unsorted",
+      name: "Unsorted",
+      documents: documentItems.filter((document) => document.notebook_id == null),
+    },
+    ...assignmentNotebooks.map((notebook) => ({
+      id: String(notebook.id),
+      name: notebook.name,
+      documents: documentItems.filter(
+        (document) => document.notebook_id === notebook.id,
+      ),
+    })),
+  ].filter((group) => group.documents.length > 0);
 
   return (
-    <div className="page-stack">
+    <div className="page-stack library-page">
       <PageHeader
-        eyebrow="Study library"
-        title="Notebooks and documents"
-        description="Organize each indexed document into one notebook, or leave it in Unsorted Documents."
+        eyebrow="Your material"
+        title="Library"
+        description="Upload study material first. Notebooks help organize it, but you can use them later."
         actions={
-          <Button
-            icon={<Plus size={18} aria-hidden="true" />}
-            onClick={() => {
-              createAction.reset();
-              setCreateOpen(true);
-            }}
-          >
-            New notebook
-          </Button>
+          <div className="button-group">
+            <Link className="button button--primary" to="#upload">
+              <FilePlus2 size={18} aria-hidden="true" />
+              <span>Upload study material</span>
+            </Link>
+            <Button
+              variant="secondary"
+              icon={<Plus size={18} aria-hidden="true" />}
+              onClick={() => {
+                createAction.reset();
+                setCreateOpen(true);
+              }}
+            >
+              New notebook
+            </Button>
+          </div>
         }
       />
 
-      <section className="page-section">
+      <form
+        className="search-form library-search"
+        role="search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSearch(searchInput.trim());
+        }}
+      >
+        <label htmlFor="library-search">Search your Library</label>
+        <div className="search-form__controls">
+          <input
+            id="library-search"
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search material or notebooks"
+            maxLength={255}
+          />
+          <Button
+            variant="secondary"
+            type="submit"
+            icon={<Search size={18} aria-hidden="true" />}
+          >
+            Search
+          </Button>
+        </div>
+      </form>
+
+      <section className="page-section library-notebooks">
         <SectionHeader
-          title="Notebooks"
-          description={`${notebooks.data.total} named notebook${notebooks.data.total === 1 ? "" : "s"}`}
-          actions={
-            <form
-              className="search-form"
-              role="search"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setSearch(searchInput.trim());
-              }}
-            >
-              <label className="visually-hidden" htmlFor="notebook-search">
-                Search notebooks
-              </label>
-              <input
-                id="notebook-search"
-                type="search"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search notebooks"
-                maxLength={200}
-              />
-              <Button
-                variant="secondary"
-                type="submit"
-                icon={<Search size={18} aria-hidden="true" />}
-              >
-                Search
-              </Button>
-            </form>
-          }
+          title="Organize with notebooks"
+          description="Notebooks are optional. Unsorted works like any other group."
         />
 
         {notebooks.isRefreshing ? (
@@ -288,16 +307,15 @@ export function NotebooksPage() {
               <div className="notebook-card__heading">
                 <h3>
                   <Link to="/notebooks/unsorted">
-                    {notebooks.data.unsorted.name}
+                    Unsorted
                   </Link>
                 </h3>
-                <Badge tone="neutral">Automatic</Badge>
+                <Badge tone="neutral">
+                  {notebooks.data.unsorted.document_count} source
+                  {notebooks.data.unsorted.document_count === 1 ? "" : "s"}
+                </Badge>
               </div>
-              <p>{notebooks.data.unsorted.description}</p>
-              <p className="notebook-card__count">
-                {notebooks.data.unsorted.document_count} document
-                {notebooks.data.unsorted.document_count === 1 ? "" : "s"}
-              </p>
+              <p>Material you have not placed in a notebook yet.</p>
             </div>
           </Card>
 
@@ -371,15 +389,15 @@ export function NotebooksPage() {
         ) : null}
       </section>
 
-      <section className="page-section">
+      <section id="upload" className="page-section">
         <SectionHeader
-          title="Upload a document"
-          description="PDF, TXT, and PPTX files up to the configured 50 MiB limit."
+          title="Upload study material"
+          description="Add a PDF, text file, or presentation. You can organize it now or later."
         />
         <Card>
           <form className="form-grid" onSubmit={handleUpload}>
             <div className="field-stack form-grid__wide">
-              <label htmlFor="document-upload">Document file</label>
+              <label htmlFor="document-upload">Study material file</label>
               <input
                 key={fileInputKey}
                 id="document-upload"
@@ -393,7 +411,8 @@ export function NotebooksPage() {
                 disabled={uploadAction.isPending}
               />
               <p className="field-help">
-                Protected, empty, corrupt, unsupported, and oversized files are rejected.
+                Files that are protected, empty, damaged, unsupported, or too
+                large cannot be added.
               </p>
             </div>
             <div className="field-stack">
@@ -404,7 +423,7 @@ export function NotebooksPage() {
                 onChange={(event) => setUploadNotebookId(event.target.value)}
                 disabled={uploadAction.isPending}
               >
-                <option value="unsorted">Unsorted Documents</option>
+                <option value="unsorted">Unsorted</option>
                 {assignmentNotebooks.map((notebook) => (
                   <option key={notebook.id} value={notebook.id ?? ""}>
                     {notebook.name}
@@ -416,11 +435,11 @@ export function NotebooksPage() {
               <Button
                 type="submit"
                 loading={uploadAction.isPending}
-                loadingText="Indexing document…"
+                loadingText="Preparing material..."
                 icon={<FilePlus2 size={18} aria-hidden="true" />}
                 disabled={!file}
               >
-                Upload and index
+                Upload study material
               </Button>
             </div>
           </form>
@@ -434,122 +453,153 @@ export function NotebooksPage() {
               tone={uploadAction.data.duplicate ? "warning" : "success"}
               title={
                 uploadAction.data.duplicate
-                  ? "Document already indexed"
-                  : "Document indexed"
+                  ? "Material already exists"
+                  : "Material is ready"
               }
             >
-              {uploadAction.data.document.filename}
-              {uploadAction.data.duplicate
-                ? " was returned without changing its notebook."
-                : " is ready to study."}
+              <div className="upload-success">
+                <p>
+                  {uploadAction.data.document.filename}
+                  {uploadAction.data.duplicate
+                    ? " is already in your Library."
+                    : " is ready to study."}
+                </p>
+                <div className="button-group">
+                  <Link className="button button--secondary" to="/chat">
+                    Ask about this
+                  </Link>
+                  <Link
+                    className="button button--primary"
+                    to={`/study-actions?view=quiz&document_ids=${
+                      uploadAction.data.document.id
+                    }&scope_name=${encodeURIComponent(
+                      uploadAction.data.document.filename,
+                    )}`}
+                  >
+                    Practice this
+                  </Link>
+                </div>
+              </div>
             </Notice>
           ) : null}
         </Card>
       </section>
 
-      <section className="page-section">
+      <section className="page-section library-material">
         <SectionHeader
-          title="All documents"
-          description="Search documents and change their single notebook assignment."
-          actions={
-            <form
-              className="search-form"
-              role="search"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setDocumentSearch(documentSearchInput.trim());
-              }}
-            >
-              <label className="visually-hidden" htmlFor="document-search">
-                Search documents
-              </label>
-              <input
-                id="document-search"
-                type="search"
-                value={documentSearchInput}
-                onChange={(event) => setDocumentSearchInput(event.target.value)}
-                placeholder="Search documents"
-                maxLength={255}
-              />
-              <Button variant="secondary" type="submit">
-                Search
-              </Button>
-            </form>
-          }
+          title="Study material"
+          description="Choose a source to ask a question, practise, or manage its organization."
         />
 
         {documents.isLoading && !documents.data ? (
-          <LoadingState message="Loading documents…" />
+          <LoadingState message="Loading study material..." />
         ) : documents.error && !documents.data ? (
           <ErrorState
-            title="Documents unavailable"
+            title="Study material is unavailable"
             message={getErrorMessage(documents.error)}
             onRetry={documents.retry}
           />
-        ) : documents.data?.items.length ? (
-          <div className="document-list">
-            {documents.data.items.map((document) => {
-              const actualValue = notebookValue(document.notebook_id);
-              const draftValue = assignmentDrafts[document.id] ?? actualValue;
-              return (
-                <Card key={document.id} padding="small">
-                  <div className="document-row">
-                    <div className="document-row__identity">
-                      <FileText size={20} aria-hidden="true" />
-                      <div>
-                        <h3>
-                          <Link to={`/documents/${document.id}`}>
-                            {document.filename}
-                          </Link>
-                        </h3>
-                        <p>
-                          {document.chunk_count} chunk
-                          {document.chunk_count === 1 ? "" : "s"} ·{" "}
-                          {document.mime_type}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="document-row__assignment">
-                      <label htmlFor={`assignment-${document.id}`}>Notebook</label>
-                      <select
-                        id={`assignment-${document.id}`}
-                        value={draftValue}
-                        disabled={assignAction.isPending}
-                        onChange={(event) =>
-                          setAssignmentDrafts((current) => ({
-                            ...current,
-                            [document.id]: event.target.value,
-                          }))
-                        }
-                      >
-                        <option value="unsorted">Unsorted Documents</option>
-                        {assignmentNotebooks.map((notebook) => (
-                          <option key={notebook.id} value={notebook.id ?? ""}>
-                            {notebook.name}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        variant="secondary"
-                        icon={<FolderInput size={17} aria-hidden="true" />}
-                        disabled={draftValue === actualValue || assignAction.isPending}
-                        onClick={() => void handleAssignment(document)}
-                      >
-                        Save assignment
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+        ) : documentGroups.length ? (
+          <div className="library-groups">
+            {documentGroups.map((group) => (
+              <section
+                key={group.id}
+                className="library-group"
+                aria-labelledby={`library-group-${group.id}`}
+              >
+                <h3 id={`library-group-${group.id}`}>{group.name}</h3>
+                <div className="document-list">
+                  {group.documents.map((document) => {
+                    const actualValue = notebookValue(document.notebook_id);
+                    const draftValue =
+                      assignmentDrafts[document.id] ?? actualValue;
+                    return (
+                      <Card key={document.id} padding="small">
+                        <div className="document-row library-source-row">
+                          <div className="document-row__identity">
+                            <FileText size={20} aria-hidden="true" />
+                            <div>
+                              <h4>
+                                <Link to={`/documents/${document.id}`}>
+                                  {document.filename}
+                                </Link>
+                              </h4>
+                              <p>Ready to study</p>
+                            </div>
+                          </div>
+                          <div className="library-source-row__actions">
+                            <Link
+                              className="button button--secondary"
+                              to="/chat"
+                            >
+                              Ask about this
+                            </Link>
+                            <Link
+                              className="button button--primary"
+                              to={`/study-actions?view=quiz&document_ids=${
+                                document.id
+                              }&scope_name=${encodeURIComponent(
+                                document.filename,
+                              )}`}
+                            >
+                              Practice this
+                            </Link>
+                          </div>
+                        </div>
+                        <details className="library-manage">
+                          <summary>Organize material</summary>
+                          <div className="document-row__assignment">
+                            <label htmlFor={`assignment-${document.id}`}>
+                              Notebook
+                            </label>
+                            <select
+                              id={`assignment-${document.id}`}
+                              value={draftValue}
+                              disabled={assignAction.isPending}
+                              onChange={(event) =>
+                                setAssignmentDrafts((current) => ({
+                                  ...current,
+                                  [document.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="unsorted">Unsorted</option>
+                              {assignmentNotebooks.map((notebook) => (
+                                <option
+                                  key={notebook.id}
+                                  value={notebook.id ?? ""}
+                                >
+                                  {notebook.name}
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              variant="secondary"
+                              icon={<FolderInput size={17} aria-hidden="true" />}
+                              disabled={
+                                draftValue === actualValue ||
+                                assignAction.isPending
+                              }
+                              onClick={() => void handleAssignment(document)}
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        </details>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         ) : (
           <EmptyState
-            title={documentSearch ? "No matching documents" : "No documents yet"}
+            title={search ? "No matching material" : "Your Library is empty"}
             description={
-              documentSearch
-                ? `No document matched “${documentSearch}”.`
-                : "Upload a PDF, TXT, or PPTX file to begin."
+              search
+                ? `No material matched "${search}".`
+                : "Upload study material first. Notebooks are optional and can be used later."
             }
             icon={<FileText />}
           />

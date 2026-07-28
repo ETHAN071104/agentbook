@@ -23,6 +23,7 @@ from backend.repositories.interfaces import (
     NotebookRepository,
     QuizRepository,
     StudySessionRepository,
+    StudyTaskRepository,
     UnitOfWork,
     VectorOutboxRepository,
     WorkflowStateRepository,
@@ -38,6 +39,7 @@ from backend.repositories.sqlite import (
     SQLiteNotebookRepository,
     SQLiteQuizRepository,
     SQLiteStudySessionRepository,
+    SQLiteStudyTaskRepository,
     SQLiteUnitOfWork,
     SQLiteVectorOutboxRepository,
     SQLiteWorkflowStateRepository,
@@ -59,6 +61,7 @@ class ApplicationDependencies:
     intelligence: IntelligenceRepository
     dashboard: DashboardRepository
     study_sessions: StudySessionRepository
+    study_tasks: StudyTaskRepository
     quizzes: QuizRepository
     memories: LearnerMemoryRepository
     learning_signals: LearningSignalRepository
@@ -103,6 +106,7 @@ def build_application_dependencies(
         intelligence=SQLiteIntelligenceRepository(workspace_id),
         dashboard=SQLiteDashboardRepository(workspace_id),
         study_sessions=SQLiteStudySessionRepository(workspace_id),
+        study_tasks=SQLiteStudyTaskRepository(workspace_id),
         quizzes=SQLiteQuizRepository(workspace_id),
         memories=SQLiteLearnerMemoryRepository(workspace_id),
         learning_signals=SQLiteLearningSignalRepository(workspace_id),
@@ -134,6 +138,7 @@ def _build_cockroach_dependencies(workspace_id: str) -> ApplicationDependencies:
         CockroachNotebookRepository,
         CockroachQuizRepository,
         CockroachStudySessionRepository,
+        CockroachStudyTaskRepository,
         CockroachUnitOfWork,
         CockroachVectorOutboxRepository,
         CockroachWorkflowStateRepository,
@@ -150,6 +155,7 @@ def _build_cockroach_dependencies(workspace_id: str) -> ApplicationDependencies:
         intelligence=CockroachIntelligenceRepository(workspace_id),
         dashboard=CockroachDashboardRepository(workspace_id),
         study_sessions=CockroachStudySessionRepository(workspace_id),
+        study_tasks=CockroachStudyTaskRepository(workspace_id),
         quizzes=CockroachQuizRepository(workspace_id),
         memories=CockroachLearnerMemoryRepository(workspace_id),
         learning_signals=CockroachLearningSignalRepository(workspace_id),

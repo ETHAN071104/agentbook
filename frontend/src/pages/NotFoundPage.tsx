@@ -9,18 +9,18 @@ export function NotFoundPage() {
       <PageHeader
         eyebrow="404"
         title="Page not found"
-        description="That study workspace does not exist or may have moved."
+        description="That page does not exist or may have moved."
       />
       <Card tone="muted" className="state">
         <span className="state__icon" aria-hidden="true">
           <ArrowLeft size={22} />
         </span>
-        <h2 className="state__title">Return to your dashboard</h2>
+        <h2 className="state__title">Return Home</h2>
         <p className="state__description">
           Your local documents and study history have not been changed.
         </p>
         <Link className="button button--primary state__action" to="/">
-          Go to dashboard
+          Go Home
         </Link>
       </Card>
     </div>

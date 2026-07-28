@@ -11,6 +11,10 @@ Persistence is selectable. `PERSISTENCE_BACKEND=sqlite` keeps the legacy local S
 - Grounded retrieval at global, notebook, document-list, or extracted-topic scope.
 - Cached document, notebook, and topic summaries with source staleness detection.
 - Scoped topic extraction, chat, review, quizzes, adaptive plans, and coaching.
+- A bounded Learning Agent grounded through four approved read-only,
+  workspace-scoped business tools, with confirmation-gated Study Task actions.
+- Persisted, workspace-scoped Study Tasks with manual lifecycle controls,
+  due dates, priorities, and idempotent creation.
 - Study sessions, outcome tracking, source lineage, progress reports, and integrity checks.
 - Learner-memory CRUD, proposal decisions, and two-step consolidation.
 - Safe local export of SQLite and both Chroma stores with a checksum manifest.
@@ -496,7 +500,15 @@ The light-only interface uses:
 - border `#D8D2C4`;
 - bundled Crimson Pro headings and Atkinson Hyperlegible body text.
 
-The app includes Dashboard, Chat, Notebooks, Notebook detail, Document detail, Topic workspace, Study Actions, Progress, Learner Memory, and System pages. Desktop uses a persistent/collapsible sidebar; smaller layouts use a top bar and accessible drawer.
+Primary navigation contains exactly Home, Library, Practice, Ask Agentbook,
+and Tasks. Chat, Progress, Learner Memory, System, notebook detail, document
+detail, and topic workspace routes remain available through contextual links.
+Desktop uses a persistent/collapsible sidebar; smaller layouts use a top bar
+and accessible drawer.
+
+Agentbook can prepare low-risk Study Task actions, but database writes occur
+only after explicit learner confirmation. Supported Agent actions are limited
+to creating one Study Task or completing one exact pending Study Task.
 
 The frontend has no Redux, Zustand, Tailwind, Material UI, or shadcn dependency. A centralized typed API client provides abortable requests, GET deduplication, and explicit invalidation. Focused hooks and context own shared state. Forms retain input after recoverable failures, and async actions expose loading, success, failure, retry, and duplicate-submission protection.
 

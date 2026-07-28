@@ -87,7 +87,8 @@ describe("shared accessible components", () => {
     expect(within(pageSource).queryByText(/Slide/)).toBeNull();
     expect(within(slideSource).getByText("Slide 6")).toBeTruthy();
     expect(within(slideSource).queryByText(/Page/)).toBeNull();
-    expect(slideSource.textContent).toContain("Notebook 4");
+    expect(slideSource.textContent).not.toContain("Notebook 4");
+    expect(slideSource.textContent).not.toContain("Document 8");
   });
 
   it("communicates every learning outcome with text, icon, and semantic tone", () => {

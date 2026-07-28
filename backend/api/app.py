@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.errors import install_error_handlers
 from backend.api.health import API_VERSION, build_health_payload
+from backend.api.routes.agent import router as agent_router
 from backend.api.routes.chat import router as chat_router
 from backend.api.routes.dashboard import router as dashboard_router
 from backend.api.routes.intelligence import router as intelligence_router
@@ -17,6 +18,7 @@ from backend.api.routes.notebooks_documents import router as library_router
 from backend.api.routes.quiz import router as quiz_router
 from backend.api.routes.reports_study import router as reports_router
 from backend.api.routes.system import router as system_router
+from backend.api.routes.study_tasks import router as study_tasks_router
 from backend.api.schemas import HealthResponse
 from backend.api.guest_auth import bind_protected_workspace
 from backend.application.dependencies import (
@@ -131,6 +133,14 @@ def create_app(
     )
     application.include_router(
         chat_router,
+        dependencies=protected_dependencies,
+    )
+    application.include_router(
+        agent_router,
+        dependencies=protected_dependencies,
+    )
+    application.include_router(
+        study_tasks_router,
         dependencies=protected_dependencies,
     )
     application.include_router(

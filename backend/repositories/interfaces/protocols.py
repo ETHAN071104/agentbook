@@ -173,6 +173,56 @@ class StudySessionRepository(Protocol):
     def end(self, session_id: int) -> Any: ...
 
 
+class StudyTaskRepository(Protocol):
+    workspace_id: str
+
+    def create_task(
+        self,
+        *,
+        title: str,
+        description: str,
+        topic: str,
+        priority: str,
+        due_at: str | None,
+        idempotency_key: str,
+        request_fingerprint: str,
+    ) -> tuple[Any, bool]: ...
+
+    def get_task(self, task_id: int) -> Any | None: ...
+
+    def list_tasks(
+        self,
+        *,
+        status: str | None,
+        due_before: str | None,
+        due_after: str | None,
+        include_archived: bool,
+        limit: int,
+    ) -> list[Any]: ...
+
+    def update_task(
+        self,
+        task_id: int,
+        *,
+        title: str | None,
+        description: str | None,
+        topic: str | None,
+        priority: str | None,
+        due_at: str | None,
+        due_at_provided: bool,
+    ) -> tuple[Any | None, bool]: ...
+
+    def complete_task(self, task_id: int) -> tuple[Any | None, bool]: ...
+
+    def reopen_task(self, task_id: int) -> tuple[Any | None, bool]: ...
+
+    def cancel_task(self, task_id: int) -> tuple[Any | None, bool]: ...
+
+    def archive_task(self, task_id: int) -> tuple[Any | None, bool]: ...
+
+    def list_events(self, task_id: int) -> list[Any]: ...
+
+
 class QuizRepository(Protocol):
     workspace_id: str
 

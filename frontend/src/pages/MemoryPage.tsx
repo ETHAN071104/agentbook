@@ -196,7 +196,7 @@ export function MemoryPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Learner memory"
+        eyebrow="Personalization settings"
         title="What your companion remembers"
         description="Keep durable preferences and learning context accurate. Chat proposals always wait for your decision."
       />
@@ -269,7 +269,7 @@ export function MemoryPage() {
         <Card>
           <form className="inline-form" onSubmit={handleSearch}>
             <label className="visually-hidden" htmlFor="memory-search">
-              Search learner memory
+              Search what Agentbook remembers
             </label>
             <input
               id="memory-search"
@@ -297,7 +297,6 @@ export function MemoryPage() {
                   <Card key={result.memory_id} tone="muted" padding="small">
                     <Badge tone="info">{titleCase(result.memory_type)}</Badge>
                     <p>{result.content}</p>
-                    <small>Match distance {result.distance.toFixed(3)}</small>
                   </Card>
                 ))}
               </div>
@@ -327,7 +326,7 @@ export function MemoryPage() {
             ) : null
           }
         />
-        {memories.isLoading ? <LoadingState message="Loading learner memory…" /> : null}
+        {memories.isLoading ? <LoadingState message="Loading saved study notes..." /> : null}
         {memories.error ? (
           <ErrorState message={errorMessage(memories.error)} onRetry={() => void memories.reload()} />
         ) : null}
@@ -389,7 +388,7 @@ export function MemoryPage() {
         open={editing !== null}
         onClose={() => setEditing(null)}
         title="Edit memory"
-        description="Changes update both SQLite and the local memory index."
+        description="Changes are saved to your private study space."
         actions={
           <>
             <Button variant="ghost" onClick={() => setEditing(null)} disabled={updateAction.isPending}>
@@ -451,8 +450,8 @@ export function MemoryPage() {
           <div className="form-stack">
             <p>
               {confirmTarget?.action === 'delete'
-                ? 'This permanently removes the memory and its local vector entry.'
-                : 'Archived memories stop influencing retrieval and cannot currently be restored in the web app.'}
+                ? 'This permanently removes the saved note.'
+                : 'Archived notes stop influencing future guidance and cannot currently be restored in the web app.'}
             </p>
             {confirmTarget?.action === 'archive' && archiveAction.error ? (
               <Notice tone="error">{errorMessage(archiveAction.error)}</Notice>

@@ -57,9 +57,9 @@ export function SystemPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Local system"
-        title="System health"
-        description="Inspect local storage and index consistency. These checks never call the language model."
+        eyebrow="Advanced"
+        title="Settings and diagnostics"
+        description="Export your data, start a new study space, or inspect advanced diagnostics."
         actions={
           <Button
             variant="secondary"
@@ -89,25 +89,21 @@ export function SystemPage() {
               </Badge>
             </Card>
             <Card>
-              <p className="metric-label">Persistence</p>
+              <p className="metric-label">Saved study data</p>
               <p className="metric-value">{titleCase(health.data.database.status)}</p>
-              <p className="supporting-text">
-                {health.data.persistence_backend === 'cockroach'
-                  ? 'CockroachDB source of truth'
-                  : 'SQLite source of truth'}
-              </p>
+              <p className="supporting-text">Private data service</p>
             </Card>
             <Card>
-              <p className="metric-label">Document index</p>
+              <p className="metric-label">Material search</p>
               <p className="metric-value">
                 {health.data.documents_vector_store.collection_present ? 'Available' : 'Ready'}
               </p>
-              <p className="supporting-text">Chroma collection</p>
+              <p className="supporting-text">Search service</p>
             </Card>
             <Card>
-              <p className="metric-label">Provider</p>
+              <p className="metric-label">Guidance service</p>
               <p className="metric-value metric-value--compact">
-                {titleCase(health.data.llm_provider)}
+                Ready
               </p>
               <p className="supporting-text">Credentials remain private</p>
             </Card>
@@ -167,7 +163,7 @@ export function SystemPage() {
               <EmptyState
                 compact
                 title="No integrity issues"
-                description="SQLite relationships and stored lineage passed the read-only checks."
+                description="Saved study records passed the read-only checks."
               />
             )}
           </Card>
@@ -180,8 +176,8 @@ export function SystemPage() {
           <div>
             <h3>Export study data</h3>
             <p>
-              Create a checksum manifest with SQLite and both Chroma stores. Secrets and temporary
-              registries are excluded.
+              Download a portable copy of your study data. Secrets and
+              temporary records are excluded.
             </p>
           </div>
           <Button
@@ -207,8 +203,8 @@ export function SystemPage() {
             <div>
               <h3>Start a new private study space</h3>
               <p>
-                This browser will switch to a fresh workspace. The previous
-                workspace is not deleted.
+                This browser will switch to a fresh study space. The previous
+                study space is not deleted.
               </p>
             </div>
             <Button

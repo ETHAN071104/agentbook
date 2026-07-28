@@ -50,6 +50,46 @@ describe('apiClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it('does not reuse a stale in-flight GET after matching invalidation', async () => {
+    let resolveStale: ((response: Response) => void) | undefined;
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (fetchMock.mock.calls.length === 1) {
+          return await new Promise<Response>((resolve, reject) => {
+            resolveStale = resolve;
+            init?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('Aborted', 'AbortError')),
+              { once: true },
+            );
+          });
+        }
+        return jsonResponse({ items: [{ id: '1' }], total: 1 });
+      },
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const stale = apiClient
+      .get<{ items: unknown[]; total: number }>('/api/documents')
+      .catch((error: unknown) => error);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    apiClient.invalidate({ prefix: '/api/documents' });
+    const fresh = apiClient.get<{ items: unknown[]; total: number }>(
+      '/api/documents',
+      { forceRefresh: true },
+    );
+
+    resolveStale?.(jsonResponse({ items: [], total: 0 }));
+
+    await expect(fresh).resolves.toEqual({
+      items: [{ id: '1' }],
+      total: 1,
+    });
+    await expect(stale).resolves.toBeInstanceOf(DOMException);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the server error envelope on ApiError', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(
       {

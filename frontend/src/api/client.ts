@@ -203,7 +203,9 @@ function requestHeaders(
 }
 
 export function setGuestSessionToken(token: string | null): void {
-  guestToken = token?.trim() || null;
+  const nextToken = token?.trim() || null;
+  if (guestToken === nextToken) return;
+  guestToken = nextToken;
   apiClient.invalidate();
 }
 
@@ -430,17 +432,27 @@ class ApiClient {
   invalidate(path: string): void;
   invalidate(target: { prefix: string }): void;
   invalidate(target?: string | { prefix: string }): void {
+    const matches = (key: string): boolean => {
+      if (target === undefined) return true;
+      if (typeof target === 'string') return key === requestUrl(target);
+      return key.startsWith(requestUrl(target.prefix));
+    };
+
     if (target === undefined) {
       this.cache.clear();
-      return;
+    } else {
+      for (const key of this.cache.keys()) {
+        if (matches(key)) this.cache.delete(key);
+      }
     }
-    if (typeof target === 'string') {
-      this.cache.delete(requestUrl(target));
-      return;
-    }
-    const prefix = requestUrl(target.prefix);
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) this.cache.delete(key);
+
+    // A mutation or workspace switch makes matching reads obsolete even if
+    // their responses have not arrived yet. Remove and abort them so a
+    // follow-up reload cannot subscribe to pre-mutation/pre-session data.
+    for (const [key, entry] of this.inFlight.entries()) {
+      if (!matches(key)) continue;
+      this.inFlight.delete(key);
+      entry.controller.abort();
     }
   }
 

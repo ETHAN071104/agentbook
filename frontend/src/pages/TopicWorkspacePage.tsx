@@ -116,7 +116,7 @@ export function TopicWorkspacePage() {
     }
   }
 
-  if (topic.isLoading) return <LoadingState message="Opening topic workspace…" />;
+  if (topic.isLoading) return <LoadingState message="Opening topic..." />;
   if (topic.error) {
     return <ErrorState message={errorMessage(topic.error)} onRetry={() => void topic.reload()} />;
   }
@@ -125,17 +125,23 @@ export function TopicWorkspacePage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Topic workspace"
+        eyebrow="Topic"
         title={topic.data.name}
         description={topic.data.description}
         actions={
-          <Link
-            className="button button--secondary"
-            to={`/study-actions?topic_id=${encodeURIComponent(topic.data.id)}&topic=${encodeURIComponent(topic.data.name)}`}
-          >
-            <BookOpenCheck size={18} aria-hidden="true" />
-            <span>Study this topic</span>
-          </Link>
+          <div className="button-group">
+            <a className="button button--primary" href="#topic-question">
+              <MessageCircleQuestion size={18} aria-hidden="true" />
+              <span>Ask about this</span>
+            </a>
+            <Link
+              className="button button--secondary"
+              to={`/study-actions?view=quiz&topic_id=${encodeURIComponent(topic.data.id)}&topic=${encodeURIComponent(topic.data.name)}`}
+            >
+              <BookOpenCheck size={18} aria-hidden="true" />
+              <span>Practice this</span>
+            </Link>
+          </div>
         }
       />
 
@@ -219,16 +225,16 @@ export function TopicWorkspacePage() {
             ) : !summary.isLoading && (!summary.error || summaryMissing) ? (
               <EmptyState
                 title="No topic summary yet"
-                description="Generation uses only the exact document and chunk pairs cited by this topic."
+                description="Generate a summary from the material connected to this topic."
               />
             ) : null}
           </section>
 
-          <section aria-labelledby="topic-question-title">
+          <section id="topic-question" aria-labelledby="topic-question-title">
             <SectionHeader
               headingId="topic-question-title"
               title="Ask about this topic"
-              description="Ask from this topic's uploaded source excerpts. For weakness analysis, use Coaching."
+              description="Ask a question using only material connected to this topic."
             />
             <Card>
               <form className="composer" onSubmit={handleQuestion}>
@@ -328,7 +334,7 @@ export function TopicWorkspacePage() {
           </div>
           {topic.data.stale ? (
             <Notice tone="warning">
-              A cited source changed after extraction. Regenerate topics from the source workspace.
+              A cited source changed. Refresh topics from the related material.
             </Notice>
           ) : null}
         </aside>

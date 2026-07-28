@@ -1,15 +1,16 @@
 import {
-  BookOpen,
-  Brain,
-  FileText,
-  MessageSquareText,
-  NotebookTabs,
+  ArrowRight,
+  BookOpenCheck,
+  Clock3,
+  FilePlus2,
+  History,
+  ListChecks,
   Play,
-  Target,
+  TrendingUp,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { api, getErrorMessage } from "../api";
+import { api, getErrorMessage, type StudyTask } from "../api";
 import {
   Badge,
   Card,
@@ -17,13 +18,12 @@ import {
   ErrorState,
   LoadingState,
   PageHeader,
-  ProgressBar,
   SectionHeader,
 } from "../components";
 import { useApiQuery } from "../hooks";
 
 function formatDate(value: string | null) {
-  if (!value) return "Not finished";
+  if (!value) return "No due date";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(undefined, {
@@ -32,23 +32,43 @@ function formatDate(value: string | null) {
   }).format(date);
 }
 
-function formatPercent(value: number | null) {
-  return value == null ? "No attempts yet" : `${Math.round(value)}%`;
+function nearestPendingTask(tasks: StudyTask[]): StudyTask | null {
+  return (
+    tasks
+      .filter((task) => task.status === "pending")
+      .sort((left, right) => {
+        if (!left.due_at && !right.due_at) {
+          return Date.parse(left.created_at) - Date.parse(right.created_at);
+        }
+        if (!left.due_at) return 1;
+        if (!right.due_at) return -1;
+        return Date.parse(left.due_at) - Date.parse(right.due_at);
+      })[0] ?? null
+  );
 }
 
 export function DashboardPage() {
   const dashboard = useApiQuery(["dashboard", 5], (signal) =>
     api.getDashboard(5, { signal }),
   );
+  const tasks = useApiQuery(["home", "study-tasks"], (signal) =>
+    api.listStudyTasks(
+      { includeArchived: false, limit: 100 },
+      { signal, forceRefresh: true, cacheTtlMs: 0 },
+    ),
+  );
+  const reviewQueue = useApiQuery(["home", "review-queue"], (signal) =>
+    api.getReviewQueue({ maxItems: 1 }, { signal }),
+  );
 
   if (dashboard.isLoading && !dashboard.data) {
-    return <LoadingState message="Preparing your study dashboard…" />;
+    return <LoadingState message="Preparing your Home page..." />;
   }
 
   if (dashboard.error && !dashboard.data) {
     return (
       <ErrorState
-        title="Dashboard unavailable"
+        title="Home is unavailable"
         message={getErrorMessage(dashboard.error)}
         onRetry={dashboard.retry}
       />
@@ -58,263 +78,211 @@ export function DashboardPage() {
   if (!dashboard.data) return null;
 
   const data = dashboard.data;
-  const ratedOutcomes =
-    data.outcomes.understood +
-    data.outcomes.partial +
-    data.outcomes.confused;
-  const totalOutcomes = ratedOutcomes + data.outcomes.unrated;
-  const metrics = [
-    {
-      label: "Documents",
-      value: data.counts.documents,
-      detail: `${data.counts.unsorted_documents} unsorted`,
-      icon: FileText,
-      to: "/notebooks",
-    },
-    {
-      label: "Notebooks",
-      value: data.counts.notebooks,
-      detail: "Organized study spaces",
-      icon: NotebookTabs,
-      to: "/notebooks",
-    },
-    {
-      label: "Study sessions",
-      value: data.counts.study_sessions,
-      detail: `${data.counts.completed_sessions} completed`,
-      icon: MessageSquareText,
-      to: "/progress",
-    },
-    {
-      label: "Active memories",
-      value: data.counts.active_memories,
-      detail: `${data.counts.archived_memories} archived`,
-      icon: Brain,
-      to: "/memory",
-    },
-  ];
+  const hasMaterial = data.counts.documents > 0;
+  const pendingTask = nearestPendingTask(tasks.data?.items ?? []);
+  const weakArea = reviewQueue.data?.items?.[0] ?? null;
+  const recentQuiz = data.recent_quizzes[0] ?? null;
+  const latestCompletedTask =
+    tasks.data?.items
+      ?.filter((task) => task.status === "completed")
+      .sort(
+        (left, right) =>
+          Date.parse(right.completed_at ?? right.updated_at) -
+          Date.parse(left.completed_at ?? left.updated_at),
+      )[0] ?? null;
+
+  const recentChange = recentQuiz
+    ? {
+        title: `${Math.round(recentQuiz.score_percentage)}% on ${recentQuiz.quiz_topic}`,
+        description:
+          recentQuiz.score_percentage < 70
+            ? "This result identified material worth reviewing next."
+            : "Your latest quiz shows a solid step forward.",
+        icon: TrendingUp,
+      }
+    : latestCompletedTask
+      ? {
+          title: latestCompletedTask.title,
+          description: "You completed this study task.",
+          icon: ListChecks,
+        }
+      : data.outcomes.confused > 0 || data.outcomes.partial > 0
+        ? {
+            title: "A recent answer needs another look",
+            description:
+              "Agentbook kept this feedback so your next review can stay focused.",
+            icon: TrendingUp,
+          }
+        : null;
+
+  const nextAction = data.active_session
+    ? {
+        title: "Continue your active session",
+        description: `You started this session ${formatDate(
+          data.active_session.started_at,
+        )}.`,
+        label: "Continue session",
+        to: "/chat",
+        icon: Play,
+      }
+    : pendingTask
+      ? {
+          title: pendingTask.title,
+          description: pendingTask.due_at
+            ? `Your nearest task is due ${formatDate(pendingTask.due_at)}.`
+            : "This is the next open task in your study list.",
+          label: "Open task",
+          to: "/tasks",
+          icon: Clock3,
+        }
+      : weakArea
+        ? {
+            title: "Review a recent weak area",
+            description: weakArea.question,
+            label: "Start review",
+            to: "/study-actions?view=review",
+            icon: TrendingUp,
+          }
+        : recentQuiz
+          ? {
+              title: `Practise ${recentQuiz.quiz_topic}`,
+              description: "Build on your most recent quiz while it is fresh.",
+              label: "Start quiz",
+              to: `/study-actions?view=quiz&topic=${encodeURIComponent(
+                recentQuiz.quiz_topic,
+              )}`,
+              icon: BookOpenCheck,
+            }
+          : hasMaterial
+            ? {
+                title: "Practise your material",
+                description: "Start a short quiz using your saved study material.",
+                label: "Start quiz",
+                to: "/study-actions?view=quiz",
+                icon: BookOpenCheck,
+              }
+            : {
+                title: "Add your first study material",
+                description:
+                  "Upload a PDF, presentation, or text file. You can organize it later.",
+                label: "Upload study material",
+                to: "/notebooks#upload",
+                icon: FilePlus2,
+              };
+
+  const NextIcon = nextAction.icon;
+  const ChangeIcon = recentChange?.icon;
 
   return (
-    <div className="page-stack">
+    <div className="page-stack home-page">
       <PageHeader
-        eyebrow="Today’s workspace"
-        title="Study dashboard"
-        description="A local, deterministic snapshot of your materials and recent learning activity."
-        actions={
-          <Link className="button button--primary" to="/chat">
-            <Play size={18} aria-hidden="true" />
-            <span>Start studying</span>
-          </Link>
-        }
+        eyebrow="Today"
+        title="Home"
+        description="See what you are learning, what changed, and the clearest next step."
       />
 
       {dashboard.isRefreshing ? (
-        <LoadingState compact message="Refreshing dashboard…" />
+        <LoadingState compact message="Refreshing Home..." />
       ) : null}
 
-      <section aria-labelledby="library-overview-heading">
-        <h2 id="library-overview-heading" className="visually-hidden">
-          Library overview
-        </h2>
-        <div className="metric-grid">
-          {metrics.map((metric) => {
-            const Icon = metric.icon;
-            return (
-              <Link
-                className="metric-card"
-                key={metric.label}
-                to={metric.to}
-                aria-label={`${metric.label}: ${metric.value}. ${metric.detail}`}
-              >
-                <span className="metric-card__icon" aria-hidden="true">
-                  <Icon size={22} />
-                </span>
-                <span className="metric-card__value">{metric.value}</span>
-                <span className="metric-card__label">{metric.label}</span>
-                <span className="metric-card__detail">{metric.detail}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      {data.active_session ? (
-        <Card tone="accent" className="active-session-card">
-          <div>
-            <p className="eyebrow">Active session</p>
-            <h2>Continue where you left off</h2>
+      <section className="home-section" aria-labelledby="learning-now-title">
+        <SectionHeader
+          headingId="learning-now-title"
+          title="What you are learning"
+        />
+        {hasMaterial ? (
+          <div className="home-learning-summary">
+            <div>
+              <p className="home-learning-summary__lead">
+                Your study material is ready when you are.
+              </p>
+              <p className="supporting-text">
+                {data.counts.documents} source
+                {data.counts.documents === 1 ? "" : "s"}
+                {data.counts.notebooks > 0
+                  ? ` organized across ${data.counts.notebooks} notebook${
+                      data.counts.notebooks === 1 ? "" : "s"
+                    }`
+                  : ""}
+                .
+              </p>
+            </div>
+            <Link className="text-link" to="/notebooks">
+              Open Library
+            </Link>
+          </div>
+        ) : (
+          <div className="home-empty-copy">
             <p>
-              Started {formatDate(data.active_session.started_at)} ·{" "}
-              {data.active_session.interaction_count} interaction
-              {data.active_session.interaction_count === 1 ? "" : "s"}
+              Start by adding material you want to learn from. Notebooks are
+              optional and can be used later for organization.
             </p>
           </div>
-          <Link className="button button--primary" to="/chat">
-            Continue session
-          </Link>
-        </Card>
-      ) : (
-        <Card tone="muted" className="active-session-card">
-          <div>
-            <p className="eyebrow">Ready when you are</p>
-            <h2>No active study session</h2>
-            <p>Ask a grounded question to begin a fresh session.</p>
+        )}
+      </section>
+
+      <section className="home-section" aria-labelledby="what-changed-title">
+        <SectionHeader
+          headingId="what-changed-title"
+          title="What changed"
+          actions={
+            <Link className="text-link" to="/progress">
+              <History size={17} aria-hidden="true" />
+              <span>View learning history</span>
+            </Link>
+          }
+        />
+        {recentChange && ChangeIcon ? (
+          <div className="home-change">
+            <span className="home-change__icon" aria-hidden="true">
+              <ChangeIcon size={21} />
+            </span>
+            <div>
+              <h3>{recentChange.title}</h3>
+              <p>{recentChange.description}</p>
+            </div>
           </div>
-          <Link className="button button--secondary" to="/chat">
-            Open chat
-          </Link>
-        </Card>
-      )}
+        ) : (
+          <p className="supporting-text">
+            Your first meaningful learning update will appear here after you
+            study or complete a task.
+          </p>
+        )}
+      </section>
 
-      <div className="dashboard-grid">
-        <Card>
-          <SectionHeader
-            title="Learning outcomes"
-            description={`${ratedOutcomes} rated of ${totalOutcomes} interactions`}
-            actions={
-              <Link className="text-link" to="/progress">
-                View progress
+      <section className="home-section" aria-labelledby="next-up-title">
+        <SectionHeader headingId="next-up-title" title="Next up" />
+        {!hasMaterial ? (
+          <EmptyState
+            icon={<FilePlus2 />}
+            title={nextAction.title}
+            description={nextAction.description}
+            action={
+              <Link className="button button--primary" to={nextAction.to}>
+                <span>{nextAction.label}</span>
+                <ArrowRight size={18} aria-hidden="true" />
               </Link>
             }
           />
-          {totalOutcomes === 0 ? (
-            <EmptyState
-              compact
-              title="No outcomes yet"
-              description="Rate chat answers to build a useful learning signal."
-              icon={<Target />}
-            />
-          ) : (
-            <div className="outcome-summary">
-              <ProgressBar
-                label="Understood"
-                value={data.outcomes.understood}
-                max={Math.max(ratedOutcomes, 1)}
-              />
-              <ProgressBar
-                label="Partly understood"
-                value={data.outcomes.partial}
-                max={Math.max(ratedOutcomes, 1)}
-              />
-              <ProgressBar
-                label="Needs review"
-                value={data.outcomes.confused}
-                max={Math.max(ratedOutcomes, 1)}
-              />
-              {data.outcomes.unrated > 0 ? (
-                <p className="muted-copy">
-                  {data.outcomes.unrated} interaction
-                  {data.outcomes.unrated === 1 ? " is" : "s are"} still unrated.
-                </p>
-              ) : null}
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <SectionHeader
-            title="Quiz performance"
-            description={`${data.quiz.completed} completed of ${data.quiz.total} attempts`}
-            actions={
-              <Link className="text-link" to="/study-actions">
-                Study actions
-              </Link>
-            }
-          />
-          {data.quiz.total === 0 ? (
-            <EmptyState
-              compact
-              title="No quiz attempts yet"
-              description="Generate a grounded quiz when you are ready to check recall."
-              icon={<BookOpen />}
-            />
-          ) : (
-            <dl className="stat-list">
-              <div>
-                <dt>Average score</dt>
-                <dd>{formatPercent(data.quiz.average_score_percentage)}</dd>
+        ) : (
+          <Card tone="accent" className="home-next-card">
+            <span className="home-next-card__icon" aria-hidden="true">
+              <NextIcon size={24} />
+            </span>
+            <div className="home-next-card__copy">
+              <div className="home-next-card__heading">
+                <h3>{nextAction.title}</h3>
+                <Badge tone="primary">Recommended</Badge>
               </div>
-              <div>
-                <dt>Answered accuracy</dt>
-                <dd>{formatPercent(data.quiz.average_accuracy_percentage)}</dd>
-              </div>
-              <div>
-                <dt>Aborted attempts</dt>
-                <dd>{data.quiz.aborted}</dd>
-              </div>
-            </dl>
-          )}
-        </Card>
-      </div>
-
-      <div className="dashboard-grid">
-        <section>
-          <SectionHeader
-            title="Recent sessions"
-            description="Your latest grounded study conversations."
-          />
-          {data.recent_sessions.length === 0 ? (
-            <EmptyState
-              compact
-              title="No sessions recorded"
-              description="Your recent sessions will appear here."
-            />
-          ) : (
-            <div className="list-stack">
-              {data.recent_sessions.map((session) => (
-                <Card key={session.id} padding="small">
-                  <div className="list-row">
-                    <div>
-                      <p className="list-row__title">Session {session.id}</p>
-                      <p className="list-row__meta">
-                        {formatDate(session.started_at)} ·{" "}
-                        {session.interaction_count} interaction
-                        {session.interaction_count === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <Badge tone={session.status === "active" ? "info" : "neutral"}>
-                      {session.status === "active" ? "Active" : "Completed"}
-                    </Badge>
-                  </div>
-                </Card>
-              ))}
+              <p>{nextAction.description}</p>
             </div>
-          )}
-        </section>
-
-        <section>
-          <SectionHeader
-            title="Recent quizzes"
-            description="Latest recall checks and trusted server scores."
-          />
-          {data.recent_quizzes.length === 0 ? (
-            <EmptyState
-              compact
-              title="No quizzes recorded"
-              description="Completed quiz attempts will appear here."
-            />
-          ) : (
-            <div className="list-stack">
-              {data.recent_quizzes.map((quiz) => (
-                <Card key={quiz.id} padding="small">
-                  <div className="list-row">
-                    <div>
-                      <p className="list-row__title">{quiz.quiz_topic}</p>
-                      <p className="list-row__meta">{formatDate(quiz.created_at)}</p>
-                    </div>
-                    <div className="list-row__end">
-                      <strong>{Math.round(quiz.score_percentage)}%</strong>
-                      <Badge tone={quiz.status === "completed" ? "success" : "warning"}>
-                        {quiz.status === "completed" ? "Completed" : "Aborted"}
-                      </Badge>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+            <Link className="button button--primary" to={nextAction.to}>
+              <span>{nextAction.label}</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+          </Card>
+        )}
+      </section>
     </div>
   );
 }

@@ -15,7 +15,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { apiClient } from '../api/client';
 import type {
@@ -52,11 +52,13 @@ import { errorMessage, formatPercent } from '../utils/format';
 type ActionView = 'review' | 'quiz' | 'plan' | 'coaching';
 
 const ACTION_TABS: Array<{ id: ActionView; label: string }> = [
-  { id: 'review', label: 'Review' },
   { id: 'quiz', label: 'Quiz' },
+  { id: 'review', label: 'Review' },
   { id: 'plan', label: 'Study plan' },
   { id: 'coaching', label: 'Coaching' },
 ];
+const PRIMARY_TABS = ACTION_TABS.slice(0, 2);
+const SECONDARY_TABS = ACTION_TABS.slice(2);
 
 interface QuizScopeSelection {
   scope?: RetrievalScope;
@@ -102,7 +104,7 @@ function parseQuizScope(searchParams: URLSearchParams): QuizScopeSelection {
         type: 'topic',
         label,
         personalized: false,
-        description: `Questions will use only the indexed source excerpts for “${label}”.`,
+        description: `Questions will use only material connected to "${label}".`,
       },
     };
   }
@@ -121,7 +123,7 @@ function parseQuizScope(searchParams: URLSearchParams): QuizScopeSelection {
         label,
         personalized: false,
         notebook_name: requestedLabel || null,
-        description: `Questions will use indexed documents in the “${label}” notebook.`,
+        description: `Questions will use material in the "${label}" notebook.`,
       },
     };
   }
@@ -144,7 +146,7 @@ function parseQuizScope(searchParams: URLSearchParams): QuizScopeSelection {
         personalized: false,
         document_name: singleDocument && requestedLabel ? requestedLabel : null,
         description: singleDocument
-          ? `Questions will use only the indexed document “${label}”.`
+          ? `Questions will use only "${label}".`
           : `Questions will use only the ${documentIds.length} selected documents.`,
       },
     };
@@ -154,9 +156,9 @@ function parseQuizScope(searchParams: URLSearchParams): QuizScopeSelection {
     label: '',
     preview: {
       type: 'global',
-      label: 'All indexed documents',
+      label: 'All study material',
       personalized: false,
-      description: 'Questions may use any of your indexed documents.',
+      description: 'Questions may use any material in your Library.',
     },
   };
 }
@@ -183,13 +185,15 @@ export function StudyActionsPage() {
   const carriedPrompt = (searchParams.get('prompt') ?? '').trim().slice(0, 4000);
   const initialView = ACTION_TABS.some((tab) => tab.id === requestedView)
     ? requestedView as ActionView
-    : scope?.topic_id
-      ? 'quiz'
-      : 'review';
+    : 'quiz';
   const [view, setView] = useState<ActionView>(initialView);
 
-  function handleTabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    const lastIndex = ACTION_TABS.length - 1;
+  function handleTabKey(
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number,
+    tabs: Array<{ id: ActionView; label: string }>,
+  ) {
+    const lastIndex = tabs.length - 1;
     const nextIndex =
       event.key === 'ArrowRight'
         ? (index + 1) % ACTION_TABS.length
@@ -202,7 +206,7 @@ export function StudyActionsPage() {
               : null;
     if (nextIndex === null) return;
     event.preventDefault();
-    const nextTab = ACTION_TABS[nextIndex];
+    const nextTab = tabs[nextIndex];
     if (!nextTab) return;
     setView(nextTab.id);
     requestAnimationFrame(() => {
@@ -213,41 +217,69 @@ export function StudyActionsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Active study"
-        title="Study actions"
+        eyebrow="Check your understanding"
+        title="Practice"
         description={
           scopeIssue
             ? scopeIssue
             : scope
-            ? `Work only from ${scopeLabel || 'the selected study scope'}.`
-            : 'Turn stored outcomes and grounded sources into the next useful study step.'
+            ? `Work only from ${scopeLabel || 'the selected material'}.`
+            : 'Use a quiz for recall or review an area that needs another look.'
         }
         actions={scope ? <Badge tone="primary">Scoped study</Badge> : null}
       />
 
-      <div className="tabs" role="tablist" aria-label="Study action">
-        {ACTION_TABS.map((tab, index) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            id={`tab-${tab.id}`}
-            aria-controls={`panel-${tab.id}`}
-            aria-selected={view === tab.id}
-            tabIndex={view === tab.id ? 0 : -1}
-            className={view === tab.id ? 'is-active' : ''}
-            onClick={() => setView(tab.id)}
-            onKeyDown={(event) => handleTabKey(event, index)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="practice-mode-picker">
+        <div className="tabs" role="tablist" aria-label="Primary practice modes">
+          {PRIMARY_TABS.map((tab, index) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-controls={`panel-${tab.id}`}
+              aria-selected={view === tab.id}
+              tabIndex={view === tab.id ? 0 : -1}
+              className={view === tab.id ? 'is-active' : ''}
+              onClick={() => setView(tab.id)}
+              onKeyDown={(event) => handleTabKey(event, index, PRIMARY_TABS)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <details
+          className="practice-more"
+          open={view === 'plan' || view === 'coaching' ? true : undefined}
+        >
+          <summary>More practice options</summary>
+          <div className="tabs tabs--secondary" role="tablist" aria-label="More practice options">
+            {SECONDARY_TABS.map((tab, index) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                id={`tab-${tab.id}`}
+                aria-controls={`panel-${tab.id}`}
+                aria-selected={view === tab.id}
+                tabIndex={view === tab.id ? 0 : -1}
+                className={view === tab.id ? 'is-active' : ''}
+                onClick={() => setView(tab.id)}
+                onKeyDown={(event) =>
+                  handleTabKey(event, index, SECONDARY_TABS)
+                }
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </details>
       </div>
 
       <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
         {scopeIssue ? (
           <EmptyState
-            title="Study scope needs attention"
+            title="Selected material needs attention"
             description={scopeIssue}
             action={<a className="text-link" href="/notebooks">Choose a study source</a>}
           />
@@ -317,7 +349,8 @@ function ReviewWorkspace({ scope }: { scope?: RetrievalScope }) {
       ) : null}
       {queue.data?.adaptation?.adapted_using_learner_memory ? (
         <Notice tone="info">
-          Review order adapted using learner memory or learning signals. {queue.data.adaptation.reason}
+          <strong>Why this was recommended:</strong>{" "}
+          {queue.data.adaptation.reason}
         </Notice>
       ) : null}
       {queue.data?.items.length ? (
@@ -361,7 +394,10 @@ function ReviewWorkspace({ scope }: { scope?: RetrievalScope }) {
           </Badge>
           <h2>{result.topic || 'Review activity'}</h2>
           {result.adaptation?.adapted_using_learner_memory ? (
-            <Notice tone="info">Why this review changed: {result.adaptation.reason}</Notice>
+            <Notice tone="info">
+              <strong>Why this was recommended:</strong>{" "}
+              {result.adaptation.reason}
+            </Notice>
           ) : null}
           {result.should_generate ? (
             <>
@@ -516,6 +552,16 @@ function QuizWorkspace({
   }
 
   if (submission) {
+    const insight =
+      submission.detected_weaknesses?.[0] ??
+      (submission.score_percentage >= 80
+        ? "You showed strong recall across this quiz."
+        : submission.score_percentage >= 60
+          ? "You have a useful foundation, with a few areas to strengthen."
+          : "A focused review will help before you try this material again.");
+    const shouldReview =
+      Boolean(submission.detected_weaknesses?.length) ||
+      submission.score_percentage < 70;
     return (
       <div className="page-stack">
         <SectionHeader
@@ -523,67 +569,48 @@ function QuizWorkspace({
           actions={<Button variant="secondary" onClick={resetQuiz}>Start another quiz</Button>}
         />
         <QuizScopeSummary scope={quiz?.scope ?? scopePreview} confirmed={Boolean(quiz?.scope)} />
-        <div className="metric-grid">
-          <Card>
+        <Card tone="accent" className="quiz-result-summary">
+          <div>
             <p className="metric-label">Score</p>
-            <p className="metric-value">{formatPercent(submission.score_percentage)}</p>
-          </Card>
-          <Card>
-            <p className="metric-label">Answered accuracy</p>
-            <p className="metric-value">{formatPercent(submission.accuracy_percentage)}</p>
-          </Card>
-          <Card>
-            <p className="metric-label">Correct</p>
-            <p className="metric-value">
-              {submission.correct_answers}/{submission.total_questions}
+            <p className="quiz-result-summary__score">
+              {formatPercent(submission.score_percentage)}
             </p>
-          </Card>
-          <Card>
-            <p className="metric-label">Status</p>
-            <p className="metric-value metric-value--compact">{submission.status}</p>
-          </Card>
-        </div>
-        {submission.detected_weaknesses?.length ? (
-          <Card tone="accent">
-            <h2>Detected weaknesses</h2>
-            <ul>
-              {submission.detected_weaknesses.map((weakness) => (
-                <li key={weakness}>{weakness}</li>
-              ))}
-            </ul>
-          </Card>
-        ) : null}
+          </div>
+          <div className="quiz-result-summary__insight">
+            <h2>Learning insight</h2>
+            <p>{insight}</p>
+          </div>
+          {shouldReview ? (
+            <Link className="button button--primary" to="/study-actions?view=review">
+              Review next
+            </Link>
+          ) : (
+            <Button onClick={resetQuiz}>Try another quiz</Button>
+          )}
+        </Card>
         {submission.learning_signals?.length ? (
           <div className="page-stack">
-            <SectionHeader title="Learning signals" description="Trusted quiz outcomes, kept separate from confirmed memory." />
+            <SectionHeader
+              title="Areas to review"
+              description="Patterns from this quiz that can guide your next practice."
+            />
             {submission.learning_signals.map((signal) => (
               <Card key={signal.id}>
-                <div className="quiz-feedback__header">
-                  <Badge tone={signal.status === 'resolved' ? 'success' : 'warning'}>
-                    {signal.signal_type.replaceAll('_', ' ')}
-                  </Badge>
-                  <span>{signal.occurrence_count} observation(s)</span>
-                </div>
                 <h3>{signal.topic}</h3>
                 <p>{signal.statement}</p>
-                <ProgressBar label="Confidence" value={signal.confidence} max={1} />
-                <details>
-                  <summary>Supporting evidence</summary>
-                  <ul>
-                    {signal.evidence.map((evidence, index) => (
-                      <li key={`${signal.id}-${index}`}>
-                        {String(evidence.question ?? 'Quiz question')} — {String(evidence.outcome ?? 'observed')}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
+                {signal.occurrence_count > 1 ? (
+                  <p className="supporting-text">Recent mistake pattern</p>
+                ) : null}
               </Card>
             ))}
           </div>
         ) : null}
         {submission.memory_proposals?.length ? (
           <div className="page-stack">
-            <SectionHeader title="Memory proposals" description="Review, edit, accept, or reject before anything becomes active learner memory." />
+            <SectionHeader
+              title="Suggested study notes"
+              description="Choose whether Agentbook should remember these notes for future guidance."
+            />
             {submission.memory_proposals.map((proposal) => {
               const decision = decidedProposals[proposal.proposal_id];
               return (
@@ -593,7 +620,7 @@ function QuizWorkspace({
                   </Badge>
                   <p>{proposal.reason}</p>
                   <label>
-                    Proposed memory
+                    Suggested note
                     <textarea
                       value={proposalDrafts[proposal.proposal_id] ?? proposal.content}
                       onChange={(event) => setProposalDrafts((current) => ({
@@ -604,14 +631,13 @@ function QuizWorkspace({
                       rows={3}
                     />
                   </label>
-                  <ProgressBar label="Confidence" value={proposal.confidence} max={1} />
                   {!decision ? (
                     <div className="card-actions">
                       <Button
                         onClick={() => void handleProposalDecision(proposal.proposal_id, 'accept', proposal.content)}
                         loading={decideProposal.isPending}
                       >
-                        Accept{proposalDrafts[proposal.proposal_id] && proposalDrafts[proposal.proposal_id] !== proposal.content ? ' edited memory' : ''}
+                        Remember note
                       </Button>
                       <Button
                         variant="secondary"
@@ -628,9 +654,23 @@ function QuizWorkspace({
             {decideProposal.error ? <Notice tone="error">{errorMessage(decideProposal.error)} The proposal remains available.</Notice> : null}
           </div>
         ) : null}
-        <div className="page-stack">
-          {submission.feedback.map((feedback) => (
-            <Card key={feedback.question_number} className="quiz-feedback">
+        <details className="quiz-result-details">
+          <summary>View detailed results</summary>
+          <dl className="stat-list">
+            <div>
+              <dt>Answered accuracy</dt>
+              <dd>{formatPercent(submission.accuracy_percentage)}</dd>
+            </div>
+            <div>
+              <dt>Correct answers</dt>
+              <dd>
+                {submission.correct_answers}/{submission.total_questions}
+              </dd>
+            </div>
+          </dl>
+          <div className="page-stack">
+            {submission.feedback.map((feedback) => (
+              <Card key={feedback.question_number} className="quiz-feedback">
               <div className="quiz-feedback__header">
                 {feedback.is_correct ? (
                   <Badge tone="success" icon={<Check size={16} aria-hidden="true" />}>Correct</Badge>
@@ -651,9 +691,10 @@ function QuizWorkspace({
                   <SourceCard key={`${feedback.question_number}-${source.index}`} source={source} />
                 ))}
               </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        </details>
       </div>
     );
   }
@@ -670,7 +711,8 @@ function QuizWorkspace({
         <QuizScopeSummary scope={quiz.scope ?? scopePreview} confirmed={Boolean(quiz.scope)} />
         {quiz.adaptation?.adapted_using_learner_memory ? (
           <Notice tone="info">
-            Adapted using learner memory. Target: {quiz.adaptation.targeted_topic ?? quiz.topic}; difficulty: {quiz.adaptation.difficulty ?? 'standard'}. {quiz.adaptation.reason}
+            <strong>Why this quiz was personalized:</strong>{" "}
+            {quiz.adaptation.reason}
           </Notice>
         ) : null}
         <ProgressBar value={answers.length} max={quiz.questions.length} label="Quiz progress" />
@@ -794,36 +836,40 @@ function QuizScopeSummary({
 }) {
   const baseType = scope.type.replace('adaptive-', '');
   const typeLabel: Record<string, string> = {
-    global: 'Global',
+    global: 'All material',
     notebook: 'Notebook',
-    document: 'Document',
-    documents: 'Documents',
+    document: 'Source',
+    documents: 'Sources',
     topic: 'Topic',
   };
   const documentCount = scope.document_count;
+  const displayLabel = scope.label.replace(/indexed documents?/gi, "study material");
+  const displayDescription = scope.description
+    .replace(/indexed documents?/gi, "study material")
+    .replace(/indexed source excerpts/gi, "connected material");
 
   return (
     <Card padding="small" tone="muted" className="quiz-scope-card">
       <div className="quiz-scope-card__header">
         <div>
           <p className="eyebrow">Quiz source</p>
-          <h3>{scope.label}</h3>
+          <h3>{displayLabel}</h3>
         </div>
         <div className="summary-badges">
           <Badge tone="primary">{typeLabel[baseType] ?? 'Scoped'}</Badge>
           {pending ? <Badge tone="info">Resolving sources</Badge> : null}
           {!pending && confirmed && scope.personalized ? (
-            <Badge tone="info">Adaptive quiz</Badge>
+            <Badge tone="info">Personalized quiz</Badge>
           ) : null}
           {!pending && confirmed && !scope.personalized ? (
             <Badge tone="neutral">Standard quiz</Badge>
           ) : null}
         </div>
       </div>
-      <p>{scope.description}</p>
+      <p>{displayDescription}</p>
       <dl className="quiz-scope-card__facts">
         <div>
-          <dt>Included documents</dt>
+          <dt>Included sources</dt>
           <dd>{documentCount ?? (pending ? 'Resolving…' : 'Confirmed when generated')}</dd>
         </div>
         <div>
@@ -932,7 +978,7 @@ function CoachingWorkspace({
     <div className="page-stack">
       <SectionHeader
         title="Grounded coaching"
-        description="Uses your quiz mistakes, Learning Signals, and Learner Memories to decide what you should review."
+        description="Uses your recent mistakes and study history to suggest what to review."
       />
       {carriedPrompt ? <CarriedPromptNotice prompt={carriedPrompt} /> : null}
       <Card>
@@ -953,7 +999,8 @@ function CoachingWorkspace({
           <div className="page-stack">
             {coaching.adaptation ? (
               <Notice tone="info">
-                <strong>Why this was recommended:</strong> {coaching.adaptation.reason} What changed: {Object.keys(coaching.adaptation.applied_changes).join(', ') || 'no learner-specific change'}.
+                <strong>Why this was recommended:</strong>{" "}
+                {coaching.adaptation.reason}
               </Notice>
             ) : null}
             {coaching.items.map((item) => (
@@ -1068,7 +1115,7 @@ function PlanResult({ plan }: { plan: StudyPlan }) {
     <div className="page-stack">
       {plan.adaptation ? (
         <Notice tone="info">
-          <strong>Why this was recommended:</strong> {plan.adaptation.reason} Memory or signal used: {[...plan.adaptation.memory_ids.map(String), ...plan.adaptation.learning_signal_ids].join(', ') || 'none'}. What changed: {Object.keys(plan.adaptation.applied_changes).join(', ') || 'none'}.
+          <strong>Why this was recommended:</strong> {plan.adaptation.reason}
         </Notice>
       ) : null}
       <ProgressBar label="Time allocated" value={allocated} max={plan.requested_minutes} />
@@ -1082,7 +1129,9 @@ function PlanResult({ plan }: { plan: StudyPlan }) {
                   <h3>{item.title}</h3>
                   <p>{item.estimated_minutes} minutes</p>
                 </div>
-                <Badge tone="info">Priority {item.priority_score}</Badge>
+                <Badge tone="info">
+                  {item.rank === 1 ? "Start here" : "Next step"}
+                </Badge>
               </div>
               <p>{item.action}</p>
               <ul>

@@ -300,6 +300,116 @@ def initialize_foundation_schema() -> None:
             ON adaptation_events(workspace_id, workflow_type, created_at)
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS study_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id TEXT NOT NULL,
+                title TEXT NOT NULL
+                    CHECK (length(trim(title)) > 0 AND length(title) <= 200),
+                description TEXT NOT NULL DEFAULT ''
+                    CHECK (length(description) <= 2000),
+                topic TEXT NOT NULL DEFAULT ''
+                    CHECK (length(topic) <= 200),
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','completed','cancelled','archived')),
+                priority TEXT NOT NULL DEFAULT 'normal'
+                    CHECK (priority IN ('low','normal','high')),
+                due_at TEXT,
+                completed_at TEXT,
+                archived_at TEXT,
+                creation_idempotency_key TEXT,
+                creation_fingerprint TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                    ON DELETE CASCADE,
+                UNIQUE (workspace_id, creation_idempotency_key),
+                UNIQUE (id, workspace_id),
+                CHECK (
+                    (status = 'completed' AND completed_at IS NOT NULL)
+                    OR status = 'archived'
+                    OR (
+                        status IN ('pending','cancelled')
+                        AND completed_at IS NULL
+                    )
+                ),
+                CHECK (
+                    (status = 'archived' AND archived_at IS NOT NULL)
+                    OR (status <> 'archived' AND archived_at IS NULL)
+                ),
+                CHECK (
+                    (
+                        creation_idempotency_key IS NULL
+                        AND creation_fingerprint IS NULL
+                    )
+                    OR
+                    (
+                        creation_idempotency_key IS NOT NULL
+                        AND length(creation_idempotency_key) BETWEEN 16 AND 200
+                        AND creation_fingerprint IS NOT NULL
+                        AND length(creation_fingerprint) = 64
+                    )
+                )
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_study_tasks_workspace_status_due
+            ON study_tasks(workspace_id, status, due_at, updated_at DESC)
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_study_tasks_workspace_pending_due
+            ON study_tasks(workspace_id, due_at, updated_at DESC)
+            WHERE status = 'pending'
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS study_task_events (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                task_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL CHECK (
+                    event_type IN (
+                        'study_task_created',
+                        'study_task_updated',
+                        'study_task_completed',
+                        'study_task_reopened',
+                        'study_task_cancelled',
+                        'study_task_archived'
+                    )
+                ),
+                previous_status TEXT CHECK (
+                    previous_status IS NULL
+                    OR previous_status IN (
+                        'pending','completed','cancelled','archived'
+                    )
+                ),
+                new_status TEXT NOT NULL CHECK (
+                    new_status IN (
+                        'pending','completed','cancelled','archived'
+                    )
+                ),
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY (task_id, workspace_id)
+                    REFERENCES study_tasks(id, workspace_id)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_study_task_events_workspace_task
+            ON study_task_events(workspace_id, task_id, created_at DESC)
+            """
+        )
 
 
 class SQLiteWorkspaceRepository:

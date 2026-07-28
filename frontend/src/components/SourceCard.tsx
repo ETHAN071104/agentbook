@@ -26,9 +26,7 @@ export function SourceCard({ source, className = "" }: SourceCardProps) {
     ? `Slide ${source.slide_number}`
     : source.page_number
       ? `Page ${source.page_number}`
-      : source.chunk_index != null
-        ? `Chunk ${source.chunk_index + 1}`
-        : null;
+      : null;
   const Icon = isPresentation ? Presentation : FileText;
 
   return (
@@ -47,8 +45,6 @@ export function SourceCard({ source, className = "" }: SourceCardProps) {
           </p>
           <div className="source-card__meta">
             {location ? <span>{location}</span> : null}
-            {source.document_id ? <span>Document {source.document_id}</span> : null}
-            {source.notebook_id ? <span>Notebook {source.notebook_id}</span> : null}
           </div>
         </div>
       </header>

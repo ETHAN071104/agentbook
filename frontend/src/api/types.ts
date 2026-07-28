@@ -1,6 +1,120 @@
 export type JsonPrimitive = string | number | boolean | null;
 export type PublicId = string;
 
+export type LearningAgentToolName =
+  | 'get_weak_topics'
+  | 'get_recent_mistakes'
+  | 'search_study_materials'
+  | 'get_current_study_plan';
+
+export type LearningAgentSuggestedAction =
+  | 'open_weak_topics'
+  | 'open_recent_quiz'
+  | 'open_document'
+  | 'open_study_plan'
+  | 'start_quiz'
+  | 'open_study_tasks'
+  | 'none';
+
+export interface LearningAgentQuery {
+  message: string;
+}
+
+export interface LearningAgentEvidence {
+  summary: string[];
+  related_document_public_ids: PublicId[];
+  related_quiz_attempt_public_ids: PublicId[];
+  weak_topics_used: string[];
+}
+
+export interface LearningAgentResponse {
+  answer: string;
+  tools_used: LearningAgentToolName[];
+  evidence: LearningAgentEvidence;
+  suggested_ui_action: LearningAgentSuggestedAction;
+  confirmation_required: boolean;
+  proposal: LearningAgentWriteProposal | null;
+}
+
+export type LearningAgentWriteAction =
+  | 'create_study_task'
+  | 'complete_study_task';
+
+export interface LearningAgentTaskPreview {
+  title: string;
+  description: string;
+  topic: string;
+  status: StudyTaskStatus;
+  priority: StudyTaskPriority;
+  due_at: string | null;
+}
+
+export interface LearningAgentWriteProposal {
+  proposal_id: string;
+  action: LearningAgentWriteAction;
+  display_title: string;
+  display_summary: string;
+  task_preview: LearningAgentTaskPreview;
+  evidence_summary: string;
+  expires_at: string;
+  confirmation_required: true;
+  risk_level: 'low';
+}
+
+export interface LearningAgentConfirmation {
+  confirm: true;
+}
+
+export interface LearningAgentConfirmationResult {
+  executed: true;
+  action: LearningAgentWriteAction;
+  task: StudyTask;
+  message: string;
+  suggested_ui_action: 'open_study_tasks';
+}
+
+export type StudyTaskStatus =
+  | 'pending'
+  | 'completed'
+  | 'cancelled'
+  | 'archived';
+export type StudyTaskPriority = 'low' | 'normal' | 'high';
+
+export interface StudyTask {
+  id: PublicId;
+  title: string;
+  description: string;
+  topic: string;
+  status: StudyTaskStatus;
+  priority: StudyTaskPriority;
+  due_at: string | null;
+  completed_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudyTaskList {
+  items: StudyTask[];
+  total: number;
+}
+
+export interface StudyTaskCreate {
+  title: string;
+  description?: string;
+  topic?: string;
+  priority?: StudyTaskPriority;
+  due_at?: string | null;
+}
+
+export interface StudyTaskUpdate {
+  title?: string;
+  description?: string | null;
+  topic?: string | null;
+  priority?: StudyTaskPriority;
+  due_at?: string | null;
+}
+
 export interface ApiErrorBody {
   code: string;
   title: string;

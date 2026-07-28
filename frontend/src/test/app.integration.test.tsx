@@ -85,7 +85,7 @@ describe("App routing and request states", () => {
     expect(
       await screen.findByRole("heading", { name: "Page not found" }),
     ).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Go to dashboard" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Go Home" })).toBeTruthy();
   });
 
   it("shows a dashboard loading state while its GET remains pending", async () => {
@@ -101,7 +101,7 @@ describe("App routing and request states", () => {
     );
 
     expect(
-      await screen.findByText(/Preparing your study dashboard/),
+      await screen.findByText(/Preparing your Home page/),
     ).toBeTruthy();
   });
 
@@ -128,7 +128,7 @@ describe("App routing and request states", () => {
     );
 
     expect(
-      await screen.findByRole("heading", { name: "Dashboard unavailable" }),
+      await screen.findByRole("heading", { name: "Home is unavailable" }),
     ).toBeTruthy();
     expect(screen.getByText("Local dashboard could not be read.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
@@ -144,15 +144,19 @@ describe("App routing and request states", () => {
     );
 
     expect(
-      await screen.findByRole("heading", { name: "Study dashboard" }),
+      await screen.findByRole("heading", { name: "Home" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("heading", { name: "No active study session" }),
+      screen.getByRole("heading", { name: "What you are learning" }),
     ).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "No outcomes yet" })).toBeTruthy();
     expect(
-      screen.getByRole("heading", { name: "No quiz attempts yet" }),
+      screen.getByRole("heading", { name: "Add your first study material" }),
     ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Upload study material" }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Active memories/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: /chat/i })).toBeNull();
   });
 });
 

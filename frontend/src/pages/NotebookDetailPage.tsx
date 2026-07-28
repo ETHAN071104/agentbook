@@ -4,6 +4,7 @@ import {
   FilePlus2,
   FileText,
   FolderInput,
+  MessageCircleQuestion,
   Pencil,
   RefreshCw,
   Search,
@@ -303,49 +304,71 @@ export function NotebookDetailPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow={isUnsorted ? "Virtual notebook" : "Notebook"}
+        eyebrow={isUnsorted ? "Library group" : "Notebook"}
         title={currentNotebook.name}
         description={currentNotebook.description || "No description added."}
         actions={
-          isUnsorted ? null : (
+          currentNotebook.document_count > 0 ? (
             <div className="button-group">
+              <Link className="button button--primary" to="/chat">
+                <MessageCircleQuestion size={18} aria-hidden="true" />
+                <span>Ask about this</span>
+              </Link>
               <Link
                 className="button button--secondary"
-                to={`/study-actions?notebook_id=${currentNotebook.id}&scope_name=${encodeURIComponent(currentNotebook.name)}`}
+                to={
+                  isUnsorted
+                    ? "/study-actions?view=quiz"
+                    : `/study-actions?view=quiz&notebook_id=${currentNotebook.id}&scope_name=${encodeURIComponent(currentNotebook.name)}`
+                }
               >
                 <BookOpenCheck size={18} aria-hidden="true" />
-                <span>Study notebook</span>
+                <span>Practice this</span>
               </Link>
-              <Button
-                variant="secondary"
-                icon={<Pencil size={18} aria-hidden="true" />}
-                onClick={() => {
-                  updateAction.reset();
-                  setEditName(currentNotebook.name);
-                  setEditDescription(currentNotebook.description);
-                  setEditOpen(true);
-                }}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="danger"
-                icon={<Trash2 size={18} aria-hidden="true" />}
-                disabled={currentNotebook.document_count > 0}
-                title={
-                  currentNotebook.document_count > 0
-                    ? "Move or remove every document before deleting"
-                    : undefined
-                }
-                onClick={() => {
-                  deleteAction.reset();
-                  setDeleteOpen(true);
-                }}
-              >
-                Delete
-              </Button>
+              {!isUnsorted ? (
+                <details className="manage-menu">
+                  <summary>Manage</summary>
+                  <Button
+                    variant="secondary"
+                    icon={<Pencil size={18} aria-hidden="true" />}
+                    onClick={() => {
+                      updateAction.reset();
+                      setEditName(currentNotebook.name);
+                      setEditDescription(currentNotebook.description);
+                      setEditOpen(true);
+                    }}
+                  >
+                    Edit notebook
+                  </Button>
+                  <Button
+                    variant="danger"
+                    icon={<Trash2 size={18} aria-hidden="true" />}
+                    disabled={currentNotebook.document_count > 0}
+                    title="Move every source before deleting this notebook"
+                    onClick={() => {
+                      deleteAction.reset();
+                      setDeleteOpen(true);
+                    }}
+                  >
+                    Delete notebook
+                  </Button>
+                </details>
+              ) : null}
             </div>
-          )
+          ) : !isUnsorted ? (
+            <Button
+              variant="secondary"
+              icon={<Pencil size={18} aria-hidden="true" />}
+              onClick={() => {
+                updateAction.reset();
+                setEditName(currentNotebook.name);
+                setEditDescription(currentNotebook.description);
+                setEditOpen(true);
+              }}
+            >
+              Edit notebook
+            </Button>
+          ) : null
         }
       />
 
@@ -370,8 +393,8 @@ export function NotebookDetailPage() {
 
       <section className="page-section">
         <SectionHeader
-          title="Documents"
-          description="Move a document to another notebook or back to Unsorted Documents without re-indexing."
+          title="Study material"
+          description="Open a source, ask about it, or move it to another notebook."
           actions={
             <form
               className="search-form"
@@ -413,11 +436,11 @@ export function NotebookDetailPage() {
           />
         ) : documentItems.length === 0 ? (
           <EmptyState
-            title={search ? "No matching documents" : "This notebook is empty"}
+            title={search ? "No matching material" : "This notebook is empty"}
             description={
               search
                 ? `No document matched “${search}”.`
-                : "Upload a new document here or move one from another notebook."
+                : "Upload new study material here or move a source from another notebook."
             }
             icon={<FileText />}
           />
@@ -439,12 +462,21 @@ export function NotebookDetailPage() {
                             {document.filename}
                           </Link>
                         </h3>
-                        <p>
-                          {document.chunk_count} chunk
-                          {document.chunk_count === 1 ? "" : "s"} ·{" "}
-                          {document.mime_type}
-                        </p>
+                        <p>Ready to study</p>
                       </div>
+                    </div>
+                    <div className="library-source-row__actions">
+                      <Link className="button button--secondary" to="/chat">
+                        Ask about this
+                      </Link>
+                      <Link
+                        className="button button--primary"
+                        to={`/study-actions?view=quiz&document_ids=${
+                          document.id
+                        }&scope_name=${encodeURIComponent(document.filename)}`}
+                      >
+                        Practice this
+                      </Link>
                     </div>
                     <div className="document-row__assignment">
                       <label htmlFor={`move-document-${document.id}`}>Move to</label>
@@ -459,7 +491,7 @@ export function NotebookDetailPage() {
                           }))
                         }
                       >
-                        <option value="unsorted">Unsorted Documents</option>
+                        <option value="unsorted">Unsorted</option>
                         {allNotebooks.data?.items.map((item) => (
                           <option key={item.id} value={item.id ?? ""}>
                             {item.name}
@@ -496,13 +528,13 @@ export function NotebookDetailPage() {
 
       <section className="page-section">
         <SectionHeader
-          title="Add a document"
+          title="Upload study material"
           description={`New uploads are assigned directly to ${currentNotebook.name}.`}
         />
         <Card>
           <form className="form-grid" onSubmit={handleUpload}>
             <div className="field-stack form-grid__wide">
-              <label htmlFor="notebook-document-upload">Document file</label>
+              <label htmlFor="notebook-document-upload">Study material file</label>
               <input
                 key={fileInputKey}
                 id="notebook-document-upload"
@@ -522,10 +554,10 @@ export function NotebookDetailPage() {
                 type="submit"
                 icon={<FilePlus2 size={18} aria-hidden="true" />}
                 loading={uploadAction.isPending}
-                loadingText="Indexing…"
+                loadingText="Preparing..."
                 disabled={!file}
               >
-                Upload and index
+                Upload study material
               </Button>
             </div>
           </form>
@@ -540,7 +572,7 @@ export function NotebookDetailPage() {
               title={
                 uploadAction.data.duplicate
                   ? "Existing document returned"
-                  : "Document indexed"
+                  : "Material is ready"
               }
             >
               {uploadAction.data.duplicate
@@ -555,7 +587,7 @@ export function NotebookDetailPage() {
         <section className="page-section">
           <SectionHeader
             title="Notebook summary"
-            description="Cached GET requests never invoke a model. Generate explicitly when you want a fresh summary."
+            description="Generate a short, cited overview when you need supporting information."
             actions={
               <Button
                 icon={
@@ -589,7 +621,7 @@ export function NotebookDetailPage() {
               <EmptyState
                 compact
                 title="No summary generated"
-                description="Generate a summary when this notebook has enough indexed evidence."
+                description="Generate a summary when this notebook has enough supporting information."
                 icon={<Sparkles />}
               />
             )}

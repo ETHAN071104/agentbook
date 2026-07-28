@@ -1,5 +1,5 @@
 import { apiClient, withQuery } from './client';
-import type { ApiCallOptions, GetOptions } from './client';
+import type { ApiCallOptions, GetOptions, MutationOptions } from './client';
 import type * as T from './types';
 
 export interface DocumentListFilters {
@@ -10,6 +10,14 @@ export interface DocumentListFilters {
 export interface ReviewQueueFilters {
   sessionLimit?: number;
   maxItems?: number;
+}
+
+export interface StudyTaskFilters {
+  status?: T.StudyTaskStatus;
+  dueBefore?: string;
+  dueAfter?: string;
+  includeArchived?: boolean;
+  limit?: number;
 }
 
 const enc = (value: string): string => encodeURIComponent(value);
@@ -294,6 +302,103 @@ export const chatApi = {
   },
 };
 
+export const learningAgentApi = {
+  query(
+    payload: T.LearningAgentQuery,
+    options?: ApiCallOptions,
+  ): Promise<T.LearningAgentResponse> {
+    return apiClient.post('/api/agent/query', payload, options);
+  },
+  confirm(
+    proposalId: string,
+    options?: ApiCallOptions,
+  ): Promise<T.LearningAgentConfirmationResult> {
+    return afterMutation(
+      apiClient.post(
+        `/api/agent/actions/${enc(proposalId)}/confirm`,
+        { confirm: true },
+        options,
+      ),
+      invalidateTasks,
+    );
+  },
+};
+
+function invalidateTasks(): void {
+  apiClient.invalidate({ prefix: '/api/study/tasks' });
+}
+
+export const studyTaskApi = {
+  list(
+    filters: StudyTaskFilters = {},
+    options?: GetOptions,
+  ): Promise<T.StudyTaskList> {
+    return apiClient.get(
+      withQuery('/api/study/tasks', {
+        status: filters.status,
+        due_before: filters.dueBefore,
+        due_after: filters.dueAfter,
+        include_archived: filters.includeArchived,
+        limit: filters.limit,
+      }),
+      options,
+    );
+  },
+  get(id: T.PublicId, options?: GetOptions): Promise<T.StudyTask> {
+    return apiClient.get(`/api/study/tasks/${enc(id)}`, options);
+  },
+  create(
+    payload: T.StudyTaskCreate,
+    idempotencyKey: string,
+    options?: MutationOptions,
+  ): Promise<T.StudyTask> {
+    return afterMutation(
+      apiClient.post('/api/study/tasks', payload, {
+        ...options,
+        headers: {
+          ...options?.headers,
+          'Idempotency-Key': idempotencyKey,
+        },
+      }),
+      invalidateTasks,
+    );
+  },
+  update(
+    id: T.PublicId,
+    payload: T.StudyTaskUpdate,
+    options?: ApiCallOptions,
+  ): Promise<T.StudyTask> {
+    return afterMutation(
+      apiClient.patch(`/api/study/tasks/${enc(id)}`, payload, options),
+      invalidateTasks,
+    );
+  },
+  complete(id: T.PublicId, options?: ApiCallOptions): Promise<T.StudyTask> {
+    return afterMutation(
+      apiClient.post(`/api/study/tasks/${enc(id)}/complete`, undefined, options),
+      invalidateTasks,
+    );
+  },
+  reopen(id: T.PublicId, options?: ApiCallOptions): Promise<T.StudyTask> {
+    return afterMutation(
+      apiClient.post(`/api/study/tasks/${enc(id)}/reopen`, undefined, options),
+      invalidateTasks,
+    );
+  },
+  cancel(id: T.PublicId, options?: ApiCallOptions): Promise<T.StudyTask> {
+    return afterMutation(
+      apiClient.post(`/api/study/tasks/${enc(id)}/cancel`, undefined, options),
+      invalidateTasks,
+    );
+  },
+  archive(id: T.PublicId, options?: ApiCallOptions): Promise<T.StudyTask> {
+    return afterMutation(
+      apiClient.post(`/api/study/tasks/${enc(id)}/archive`, undefined, options),
+      invalidateTasks,
+    );
+  },
+};
+
 export const sessionApi = {
   list(options?: GetOptions): Promise<T.StudySessionList> {
     return apiClient.get('/api/study/sessions', options);
@@ -495,6 +600,8 @@ export const api = {
   documents: documentApi,
   intelligence: intelligenceApi,
   chat: chatApi,
+  learningAgent: learningAgentApi,
+  studyTasks: studyTaskApi,
   sessions: sessionApi,
   memories: memoryApi,
   quizzes: quizApi,
@@ -529,6 +636,16 @@ export const api = {
   extractNotebookTopics: intelligenceApi.extractNotebookTopics,
   extractTopics: intelligenceApi.extractTopics,
   sendChat: chatApi.send,
+  queryLearningAgent: learningAgentApi.query,
+  confirmLearningAgentAction: learningAgentApi.confirm,
+  listStudyTasks: studyTaskApi.list,
+  getStudyTask: studyTaskApi.get,
+  createStudyTask: studyTaskApi.create,
+  updateStudyTask: studyTaskApi.update,
+  completeStudyTask: studyTaskApi.complete,
+  reopenStudyTask: studyTaskApi.reopen,
+  cancelStudyTask: studyTaskApi.cancel,
+  archiveStudyTask: studyTaskApi.archive,
   updateInteractionOutcome: chatApi.updateOutcome,
   listStudySessions: sessionApi.list,
   getStudySession: sessionApi.get,
