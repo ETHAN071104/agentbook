@@ -1,0 +1,95 @@
+{
+  "checks": [
+    {
+      "details": {
+        "cloud_provider": "CLOUD_PROVIDER_GCP",
+        "cockroachdb_version": "v25.2.4",
+        "plan_type": "PLAN_STANDARD",
+        "regions": [
+          "us-central1"
+        ],
+        "resource_limit_or_hardware": "200",
+        "state": "CLUSTER_STATE_CREATED"
+      },
+      "key": "cluster_availability",
+      "recommended_action": null,
+      "status": "healthy",
+      "summary": "The target CockroachDB Cloud cluster reports an available state.",
+      "title": "Cluster availability"
+    },
+    {
+      "details": {
+        "enabled": true,
+        "frequency_minutes": 60,
+        "retention_days": 30
+      },
+      "key": "managed_backup_configuration",
+      "recommended_action": null,
+      "status": "healthy",
+      "summary": "Managed backups are enabled with visible frequency and retention settings.",
+      "title": "Managed backup configuration"
+    },
+    {
+      "details": {
+        "age_minutes": 30,
+        "backup_count_observed": 2,
+        "frequency_minutes": 60,
+        "freshness_tolerance_minutes": 120,
+        "latest_backup_status": "COMPLETE",
+        "latest_backup_time": "2026-07-28T11:30:00+00:00"
+      },
+      "key": "backup_freshness",
+      "recommended_action": null,
+      "status": "healthy",
+      "summary": "The latest visible backup is within the configured freshness tolerance.",
+      "title": "Backup freshness"
+    },
+    {
+      "details": {
+        "failed_count": 0,
+        "incomplete_count": 0,
+        "latest_restore_status": "SUCCESS",
+        "latest_restore_time": "2026-07-20T12:00:00+00:00",
+        "pending_count": 0,
+        "total_restore_count": 1
+      },
+      "key": "restore_status",
+      "recommended_action": null,
+      "status": "healthy",
+      "summary": "Managed backups were observed and no failed restore record was found.",
+      "title": "Restore status"
+    },
+    {
+      "details": {
+        "allowed_upgrade_targets": [],
+        "running_major_version": "v25.2",
+        "support_days_remaining": 112,
+        "support_end": "2026-11-18",
+        "support_status": "SUPPORTED"
+      },
+      "key": "version_support",
+      "recommended_action": null,
+      "status": "healthy",
+      "summary": "The running CockroachDB major version is marked supported.",
+      "title": "Version support"
+    }
+  ],
+  "cluster_display_name": "Agentbook CockroachDB Cluster",
+  "commands_used": [
+    "Check ccloud CLI version",
+    "Verify ccloud authentication status",
+    "Validate configured target cluster",
+    "Inspect cluster availability and configuration",
+    "Inspect managed backup configuration",
+    "Inspect managed backup freshness",
+    "Inspect restore-operation status",
+    "Inspect CockroachDB version support"
+  ],
+  "data_access_statement": "No learner documents, quiz responses, memories, tasks, embeddings, or SQL rows were accessed during this check.",
+  "generated_at": "2026-07-28T12:00:00+00:00",
+  "limitations": [],
+  "overall_status": "healthy",
+  "recommended_actions": [],
+  "report_version": "1.0",
+  "warnings": []
+}

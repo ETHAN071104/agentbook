@@ -1,0 +1,85 @@
+{
+  "connection": {
+    "details": {
+      "connected": true,
+      "read_only_mode": "verified",
+      "target": "Agentbook CockroachDB Cluster"
+    },
+    "evidence_category": "synthetic_example",
+    "finding": "Managed MCP connectivity and read-only metadata access succeeded.",
+    "recommended_action": null,
+    "status": "passed",
+    "title": "MCP connectivity"
+  },
+  "generated_at": "2026-01-01T00:00:00+00:00",
+  "limitations": [
+    "Synthetic example; no live learner data was inspected.",
+    "Checks cover only the inspected critical query templates."
+  ],
+  "overall_status": "passed",
+  "privacy_boundary": "No learner content, raw rows, embeddings, credentials, workspace identifiers, or raw MCP messages are returned by these diagnostics.",
+  "query_plans": [
+    {
+      "bounded_limit_present": true,
+      "finding": "EXPLAIN completed for the fixed query.",
+      "full_scan_observed": false,
+      "index_reference_detected": true,
+      "name": "weak_topics",
+      "status": "passed",
+      "workspace_predicate_present": true
+    }
+  ],
+  "report_version": "1.0",
+  "schema": {
+    "details": {
+      "migration_compatibility": "compatible",
+      "missing_tables": [],
+      "present_table_count": 27,
+      "required_table_count": 27
+    },
+    "evidence_category": "synthetic_example",
+    "finding": "Required Agentbook tables were detected.",
+    "recommended_action": null,
+    "status": "passed",
+    "title": "Required schema"
+  },
+  "vector_indexes": {
+    "details": {
+      "document_vector_index": "available",
+      "learner_memory_vector_index": "available",
+      "workspace_strategy_verified": true
+    },
+    "evidence_category": "synthetic_example",
+    "finding": "The expected vector indexes were detected.",
+    "recommended_action": null,
+    "status": "passed",
+    "title": "Distributed vector indexes"
+  },
+  "weak_topic_query": {
+    "details": {
+      "bounded_result_behavior_detected": true,
+      "explain_successful": true,
+      "query_valid": true,
+      "schema_compatible": true,
+      "workspace_predicate_detected": true
+    },
+    "evidence_category": "synthetic_example",
+    "finding": "EXPLAIN completed for the fixed weak-topic query.",
+    "recommended_action": null,
+    "status": "passed",
+    "title": "Weak-topic query"
+  },
+  "workspace_safety": {
+    "details": {
+      "application_ownership_resolved_server_side": true,
+      "bounded_limit_present": true,
+      "plan_inspected": true,
+      "workspace_predicate_present": true
+    },
+    "evidence_category": "synthetic_example",
+    "finding": "The inspected critical query templates contain workspace-scoped predicates.",
+    "recommended_action": null,
+    "status": "passed",
+    "title": "Workspace-safe query validation"
+  }
+}

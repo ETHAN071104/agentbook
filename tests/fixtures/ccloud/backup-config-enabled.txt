@@ -1,0 +1,4 @@
+Cluster: agentbook-primary
+Backups Enabled: Yes
+Frequency: Every 60 minutes
+Retention: 30 days

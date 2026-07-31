@@ -1,0 +1,7 @@
+Name: agentbook-primary
+State: CLUSTER_STATE_CREATED
+Plan Type: PLAN_STANDARD
+Cloud Provider: CLOUD_PROVIDER_GCP
+Regions: us-central1
+Version: v25.2.4
+Spend Limit: 200

@@ -42,6 +42,12 @@ data/exports/
 data/tmp/
 study-companion-export-*.zip
 
+# Local Reliability Agent output (repository keeps sanitized examples only)
+artifacts/reliability/
+
+# Local MCP diagnostics output (repository keeps synthetic examples only)
+artifacts/mcp-diagnostics/
+
 # Logs and temporary files
 *.log
 logs/
