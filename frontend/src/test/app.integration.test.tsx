@@ -95,7 +95,7 @@ describe("App routing and request states", () => {
     );
 
     render(
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={["/app"]}>
         <App />
       </MemoryRouter>,
     );
@@ -122,7 +122,7 @@ describe("App routing and request states", () => {
     );
 
     render(
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={["/app"]}>
         <App />
       </MemoryRouter>,
     );
@@ -138,7 +138,7 @@ describe("App routing and request states", () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(emptyDashboard)));
 
     render(
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={["/app"]}>
         <App />
       </MemoryRouter>,
     );

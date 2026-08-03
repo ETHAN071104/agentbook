@@ -162,7 +162,7 @@ describe("recoverable study workflows", () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole("tab", { name: "Quiz" }));
+    await screen.findByRole("heading", { name: "Generate your quiz" });
     await user.type(screen.getByLabelText("Quiz topic"), "plant energy");
     await user.selectOptions(screen.getByLabelText("Number of questions"), "1");
     await user.click(screen.getByRole("button", { name: "Generate quiz" }));
@@ -198,6 +198,90 @@ describe("recoverable study workflows", () => {
     expect(screen.getByText("Questions may use any material in your Library.")).toBeTruthy();
   });
 
+  it("loads notebooks and sends the selected notebook as the quiz scope", async () => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const url = requestUrl(input);
+        if (init?.method === "GET" && url.endsWith("/api/notebooks")) {
+          return jsonResponse({
+            items: [
+              {
+                id: "42",
+                name: "Biology",
+                description: "Cell biology notes",
+                document_count: 3,
+                created_at: null,
+                updated_at: null,
+                is_virtual: false,
+              },
+            ],
+            total: 1,
+            unsorted: {
+              id: null,
+              name: "Unsorted",
+              description: "",
+              document_count: 0,
+              created_at: null,
+              updated_at: null,
+              is_virtual: true,
+            },
+          });
+        }
+        if (init?.method === "POST" && url.endsWith("/api/study/actions/quizzes/generate")) {
+          return jsonResponse({
+            quiz_id: "notebook-quiz",
+            requested_topic: "cell division",
+            topic: "Cell Division",
+            confidence: 0.9,
+            scope: {
+              type: "notebook",
+              label: "Biology",
+              document_count: 3,
+              personalized: false,
+              resolved_document_ids: ["7", "8", "9"],
+              description: "Questions use material from the Biology notebook.",
+              notebook_name: "Biology",
+            },
+            questions: [
+              {
+                question_number: 1,
+                question: "What happens during mitosis?",
+                options: ["Cells divide", "DNA disappears", "Protein stops", "Nothing"],
+              },
+            ],
+          });
+        }
+        throw new Error(`Unexpected request: ${init?.method} ${url}`);
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <StudyActionsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("radio", { name: /Specific topic/ }));
+    const notebook = await screen.findByLabelText("Notebook");
+    await screen.findByRole("option", { name: "Biology (3 sources)" });
+    await user.selectOptions(notebook, "42");
+    await user.type(screen.getByLabelText("Quiz topic"), "cell division");
+    await user.click(screen.getByRole("button", { name: "Generate quiz" }));
+
+    expect(await screen.findByRole("heading", { name: "What happens during mitosis?" })).toBeTruthy();
+    const generateCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        init?.method === "POST" && requestUrl(input).endsWith("/api/study/actions/quizzes/generate"),
+    );
+    expect(JSON.parse(String(generateCall?.[1]?.body))).toMatchObject({
+      topic: "cell division",
+      question_count: 3,
+      notebook_id: "42",
+    });
+  });
+
   it("keeps quiz scope visible while sources resolve and after generation", async () => {
     let resolveGeneration: ((response: Response) => void) | undefined;
     const generation = new Promise<Response>((resolve) => {
@@ -224,11 +308,11 @@ describe("recoverable study workflows", () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole("tab", { name: "Quiz" }));
-    expect(screen.getByText("plants.pdf")).toBeTruthy();
-    expect(screen.getByText('Questions will use only "plants.pdf".')).toBeTruthy();
+    await screen.findByRole("heading", { name: "Generate your quiz" });
+    expect(screen.getByText("Work only from plants.pdf.")).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Current selection — plants.pdf" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Generate quiz" }));
-    expect(await screen.findByText("Resolving sources")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Generating grounded quiz…" })).toBeTruthy();
 
     resolveGeneration?.(jsonResponse({
       quiz_id: "scope-loading",
@@ -302,7 +386,7 @@ describe("recoverable study workflows", () => {
       </MemoryRouter>,
     );
 
-    await user.click(await screen.findByRole("tab", { name: "Quiz" }));
+    await screen.findByRole("heading", { name: "Generate your quiz" });
     await user.type(screen.getByLabelText("Quiz topic"), "plant energy");
     await user.click(screen.getByRole("button", { name: "Generate quiz" }));
 

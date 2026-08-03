@@ -1,0 +1,83 @@
+.logoloop {
+  position: relative;
+  width: 100%;
+  height: var(--ll-height, 48px);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.logoloop-track {
+  display: flex;
+  align-items: center;
+  gap: var(--ll-gap, 48px);
+  will-change: transform;
+}
+
+.logoloop-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #64748b;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  transition: color 0.2s, background 0.2s, transform 0.2s;
+  white-space: nowrap;
+}
+
+.logoloop-item:hover {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.logoloop-scale .logoloop-item:hover {
+  transform: scale(1.05);
+}
+
+.logoloop-icon {
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.logoloop-title {
+  font-family: "Outfit", sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.logoloop-fade {
+  position: absolute;
+  top: 0;
+  width: 80px;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.logoloop-fade-left {
+  left: 0;
+}
+
+.logoloop-fade-right {
+  right: 0;
+}
+
+/* Dark mode */
+.dark .logoloop-item {
+  color: #94a3b8;
+}
+
+.dark .logoloop-item:hover {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.dark .logoloop-fade-left {
+  background: linear-gradient(to right, #0f172a, transparent) !important;
+}
+
+.dark .logoloop-fade-right {
+  background: linear-gradient(to left, #0f172a, transparent) !important;
+}

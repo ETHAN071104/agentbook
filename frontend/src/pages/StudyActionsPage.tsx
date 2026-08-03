@@ -1,9 +1,14 @@
 import {
   BrainCircuit,
+  BookOpenCheck,
+  CalendarDays,
   Check,
   ClipboardList,
+  FileText,
   Lightbulb,
   ListChecks,
+  MessageCircleMore,
+  RefreshCw,
   SkipForward,
   Sparkles,
   X,
@@ -12,7 +17,6 @@ import {
   useMemo,
   useState,
   type FormEvent,
-  type KeyboardEvent,
   type ReactNode,
 } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -20,6 +24,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type {
   CoachingPlan,
+  NotebookList,
   PublicId,
   PresentedQuiz,
   QuizAnswer,
@@ -51,14 +56,7 @@ import { errorMessage, formatPercent } from '../utils/format';
 
 type ActionView = 'review' | 'quiz' | 'plan' | 'coaching';
 
-const ACTION_TABS: Array<{ id: ActionView; label: string }> = [
-  { id: 'quiz', label: 'Quiz' },
-  { id: 'review', label: 'Review' },
-  { id: 'plan', label: 'Study plan' },
-  { id: 'coaching', label: 'Coaching' },
-];
-const PRIMARY_TABS = ACTION_TABS.slice(0, 2);
-const SECONDARY_TABS = ACTION_TABS.slice(2);
+const ACTION_VIEWS: ActionView[] = ['quiz', 'review', 'plan', 'coaching'];
 
 interface QuizScopeSelection {
   scope?: RetrievalScope;
@@ -183,39 +181,13 @@ export function StudyActionsPage() {
     scopeSelection;
   const requestedView = searchParams.get('view');
   const carriedPrompt = (searchParams.get('prompt') ?? '').trim().slice(0, 4000);
-  const initialView = ACTION_TABS.some((tab) => tab.id === requestedView)
+  const initialView = ACTION_VIEWS.includes(requestedView as ActionView)
     ? requestedView as ActionView
     : 'quiz';
   const [view, setView] = useState<ActionView>(initialView);
 
-  function handleTabKey(
-    event: KeyboardEvent<HTMLButtonElement>,
-    index: number,
-    tabs: Array<{ id: ActionView; label: string }>,
-  ) {
-    const lastIndex = tabs.length - 1;
-    const nextIndex =
-      event.key === 'ArrowRight'
-        ? (index + 1) % ACTION_TABS.length
-        : event.key === 'ArrowLeft'
-          ? (index - 1 + ACTION_TABS.length) % ACTION_TABS.length
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? lastIndex
-              : null;
-    if (nextIndex === null) return;
-    event.preventDefault();
-    const nextTab = tabs[nextIndex];
-    if (!nextTab) return;
-    setView(nextTab.id);
-    requestAnimationFrame(() => {
-      document.getElementById(`tab-${nextTab.id}`)?.focus();
-    });
-  }
-
   return (
-    <div className="page-stack">
+    <div className="page-stack practice-page">
       <PageHeader
         eyebrow="Check your understanding"
         title="Practice"
@@ -229,54 +201,7 @@ export function StudyActionsPage() {
         actions={scope ? <Badge tone="primary">Scoped study</Badge> : null}
       />
 
-      <div className="practice-mode-picker">
-        <div className="tabs" role="tablist" aria-label="Primary practice modes">
-          {PRIMARY_TABS.map((tab, index) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              id={`tab-${tab.id}`}
-              aria-controls={`panel-${tab.id}`}
-              aria-selected={view === tab.id}
-              tabIndex={view === tab.id ? 0 : -1}
-              className={view === tab.id ? 'is-active' : ''}
-              onClick={() => setView(tab.id)}
-              onKeyDown={(event) => handleTabKey(event, index, PRIMARY_TABS)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <details
-          className="practice-more"
-          open={view === 'plan' || view === 'coaching' ? true : undefined}
-        >
-          <summary>More practice options</summary>
-          <div className="tabs tabs--secondary" role="tablist" aria-label="More practice options">
-            {SECONDARY_TABS.map((tab, index) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                id={`tab-${tab.id}`}
-                aria-controls={`panel-${tab.id}`}
-                aria-selected={view === tab.id}
-                tabIndex={view === tab.id ? 0 : -1}
-                className={view === tab.id ? 'is-active' : ''}
-                onClick={() => setView(tab.id)}
-                onKeyDown={(event) =>
-                  handleTabKey(event, index, SECONDARY_TABS)
-                }
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </details>
-      </div>
-
-      <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
+      <div className="practice-page__content">
         {scopeIssue ? (
           <EmptyState
             title="Selected material needs attention"
@@ -299,6 +224,7 @@ export function StudyActionsPage() {
             {view === 'coaching' ? (
               <CoachingWorkspace scope={scope} carriedPrompt={carriedPrompt} />
             ) : null}
+            <PracticeOptions activeView={view} onSelect={setView} />
           </>
         )}
       </div>
@@ -437,11 +363,21 @@ function QuizWorkspace({
 }) {
   const [topic, setTopic] = useState(initialTopic);
   const [questionCount, setQuestionCount] = useState(3);
+  const [sourceMode, setSourceMode] = useState<'all' | 'specific'>(scope ? 'specific' : 'all');
+  const [selectedNotebookId, setSelectedNotebookId] = useState(
+    scope?.notebook_id ? String(scope.notebook_id) : '',
+  );
   const [quiz, setQuiz] = useState<PresentedQuiz | null>(null);
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [submission, setSubmission] = useState<QuizSubmission | null>(null);
   const [proposalDrafts, setProposalDrafts] = useState<Record<string, string>>({});
   const [decidedProposals, setDecidedProposals] = useState<Record<string, string>>({});
+  const notebooks = useAsyncAction((signal: AbortSignal) =>
+    apiClient.get<NotebookList>('/api/notebooks', { signal }),
+  );
+  const selectedScope: RetrievalScope | undefined = selectedNotebookId
+    ? { notebook_id: selectedNotebookId }
+    : scope;
   const generate = useAsyncAction((
     requestedTopic: string,
     count: number,
@@ -452,7 +388,7 @@ function QuizWorkspace({
       {
         topic: requestedTopic,
         question_count: count,
-        ...(scope ?? {}),
+        ...(sourceMode === 'specific' ? selectedScope ?? {} : {}),
       },
       { signal },
     ),
@@ -485,6 +421,16 @@ function QuizWorkspace({
   );
 
   const currentQuestion = quiz?.questions[answers.length];
+  const availableNotebooks = (notebooks.data?.items ?? []).filter(
+    (notebook) => notebook.id !== null && !notebook.is_virtual,
+  );
+
+  function chooseSourceMode(mode: 'all' | 'specific') {
+    setSourceMode(mode);
+    if (mode === 'specific' && !notebooks.data && !notebooks.isPending) {
+      void notebooks.run().catch(() => undefined);
+    }
+  }
 
   async function handleGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -769,14 +715,104 @@ function QuizWorkspace({
   }
 
   return (
-    <div className="page-stack">
-      <SectionHeader
-        title="Grounded quiz"
-        description="Correct options and explanations stay on the server until you submit."
-      />
-      <QuizScopeSummary scope={scopePreview} pending={generate.isPending} />
-      <Card>
-        <form className="form-stack" onSubmit={handleGenerate}>
+    <div className="page-stack quiz-builder">
+      <Card className="quiz-builder__card" padding="large">
+        <div className="quiz-builder__title">
+          <span className="quiz-builder__title-icon">
+            <BrainCircuit size={28} aria-hidden="true" />
+          </span>
+          <div>
+            <p className="eyebrow">Grounded in your library</p>
+            <h2>Generate your quiz</h2>
+          </div>
+        </div>
+        <form className="quiz-builder__form" onSubmit={handleGenerate}>
+          <section className="quiz-builder__step" aria-labelledby="quiz-source-heading">
+            <div className="quiz-builder__step-heading">
+              <span>Step 1</span>
+              <h3 id="quiz-source-heading">Select material source</h3>
+            </div>
+            <div className="quiz-source-options" role="radiogroup" aria-label="Quiz material source">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={sourceMode === 'all'}
+                className={sourceMode === 'all' ? 'quiz-source-option is-selected' : 'quiz-source-option'}
+                onClick={() => chooseSourceMode('all')}
+              >
+                <span className="quiz-source-option__check"><Check size={18} aria-hidden="true" /></span>
+                <BookOpenCheck size={25} aria-hidden="true" />
+                <span>
+                  <strong>All materials</strong>
+                  <small>Questions may use any material in your Library.</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={sourceMode === 'specific'}
+                className={sourceMode === 'specific' ? 'quiz-source-option is-selected' : 'quiz-source-option'}
+                onClick={() => chooseSourceMode('specific')}
+              >
+                <span className="quiz-source-option__check"><Check size={18} aria-hidden="true" /></span>
+                <FileText size={25} aria-hidden="true" />
+                <span>
+                  <strong>Specific topic</strong>
+                  <small>Choose a notebook, then focus the quiz with a topic.</small>
+                </span>
+              </button>
+            </div>
+            {sourceMode === 'specific' ? (
+              <div className="quiz-notebook-picker">
+                <label htmlFor="quiz-notebook">
+                  Notebook
+                  <select
+                    id="quiz-notebook"
+                    value={selectedNotebookId}
+                    onChange={(event) => setSelectedNotebookId(event.target.value)}
+                    onFocus={() => {
+                      if (!notebooks.data && !notebooks.isPending) {
+                        void notebooks.run().catch(() => undefined);
+                      }
+                    }}
+                    required={!scope}
+                    disabled={notebooks.isPending && !notebooks.data}
+                  >
+                    <option value="">
+                      {scope ? `Current selection — ${scopePreview.label}` : notebooks.isPending ? 'Loading notebooks…' : 'Choose a notebook'}
+                    </option>
+                    {scope?.notebook_id && !availableNotebooks.some((notebook) => String(notebook.id) === String(scope.notebook_id)) ? (
+                      <option value={String(scope.notebook_id)}>{scopePreview.label}</option>
+                    ) : null}
+                    {availableNotebooks.map((notebook) => (
+                      <option key={String(notebook.id)} value={String(notebook.id)}>
+                        {notebook.name} ({notebook.document_count} source{notebook.document_count === 1 ? '' : 's'})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {notebooks.error ? (
+                  <div className="quiz-notebook-picker__error">
+                    <span>Could not load notebooks.</span>
+                    <Button variant="ghost" onClick={() => void notebooks.retry()}>
+                      Try again
+                    </Button>
+                  </div>
+                ) : null}
+                {notebooks.data && availableNotebooks.length === 0 && !scope ? (
+                  <p>
+                    No notebooks yet. <Link className="text-link" to="/notebooks">Create one in Library</Link>.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+          <section className="quiz-builder__step quiz-builder__step--details" aria-labelledby="quiz-details-heading">
+            <div className="quiz-builder__step-heading">
+              <span>Step 2</span>
+              <h3 id="quiz-details-heading">Refine quiz details</h3>
+            </div>
+            <div className="quiz-builder__fields">
           <label>
             Quiz topic
             <input
@@ -795,12 +831,18 @@ function QuizWorkspace({
             >
               {[1, 2, 3, 4, 5, 6].map((count) => (
                 <option value={count} key={count}>
-                  {count}
+                  {count} {count === 1 ? 'question' : 'questions'}
                 </option>
               ))}
             </select>
           </label>
+              <p className="quiz-builder__privacy">
+                Correct options and explanations stay on the server until you submit.
+              </p>
+            </div>
+          </section>
           {generate.error ? (
+            <div className="quiz-builder__error">
             <ErrorNotice
               error={generate.error}
               onRetry={() => generate.retry()}
@@ -810,11 +852,14 @@ function QuizWorkspace({
                 </a>
               }
             />
+            </div>
           ) : null}
           <Button
             type="submit"
-            icon={<BrainCircuit size={18} aria-hidden="true" />}
+            className="quiz-builder__submit"
+            icon={<BrainCircuit size={21} aria-hidden="true" />}
             loading={generate.isPending}
+            disabled={sourceMode === 'specific' && !selectedScope}
             loadingText="Generating grounded quiz…"
           >
             Generate quiz
@@ -822,6 +867,75 @@ function QuizWorkspace({
         </form>
       </Card>
     </div>
+  );
+}
+
+function PracticeOptions({
+  activeView,
+  onSelect,
+}: {
+  activeView: ActionView;
+  onSelect: (view: ActionView) => void;
+}) {
+  const options: Array<{
+    id: Exclude<ActionView, 'quiz'>;
+    title: string;
+    description: string;
+    action: string;
+    icon: ReactNode;
+  }> = [
+    {
+      id: 'review',
+      title: 'Review queue',
+      description: 'Revisit weak areas and turn recent learning signals into focused recall.',
+      action: 'Open review',
+      icon: <RefreshCw size={24} aria-hidden="true" />,
+    },
+    {
+      id: 'plan',
+      title: 'Study plan',
+      description: 'Create a time-boxed plan ordered around what matters most next.',
+      action: 'Build a plan',
+      icon: <CalendarDays size={24} aria-hidden="true" />,
+    },
+    {
+      id: 'coaching',
+      title: 'AI coaching',
+      description: 'Use performance history for a personalized next-step recommendation.',
+      action: 'Start coaching',
+      icon: <MessageCircleMore size={24} aria-hidden="true" />,
+    },
+  ];
+
+  return (
+    <section className="practice-options" aria-labelledby="practice-options-title">
+      <SectionHeader
+        title="More practice options"
+        headingId="practice-options-title"
+        description="Choose another way to reinforce what you are learning."
+      />
+      <div className="practice-options__grid">
+        {options.map((option) => (
+          <Card
+            key={option.id}
+            className={activeView === option.id ? 'practice-option is-active' : 'practice-option'}
+          >
+            <div className="practice-option__heading">
+              <span className="practice-option__icon">{option.icon}</span>
+              <h3>{option.title}</h3>
+            </div>
+            <p>{option.description}</p>
+            <Button
+              variant={activeView === option.id ? 'primary' : 'secondary'}
+              onClick={() => onSelect(option.id)}
+              aria-pressed={activeView === option.id}
+            >
+              {activeView === option.id ? `${option.title} selected` : option.action}
+            </Button>
+          </Card>
+        ))}
+      </div>
+    </section>
   );
 }
 

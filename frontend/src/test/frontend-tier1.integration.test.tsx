@@ -387,15 +387,18 @@ describe("Tier 1 Library", () => {
       </MemoryRouter>,
     );
 
-    const fileInput = await screen.findByLabelText("Study material file");
+    await user.click(
+      await screen.findByRole("link", { name: "Upload study material" }),
+    );
+    const uploadDialog = screen.getByRole("dialog", {
+      name: "Upload study material",
+    });
+    const fileInput = within(uploadDialog).getByLabelText("Study material file");
     await user.upload(
       fileInput,
       new File(["plant notes"], "plants.pdf", { type: "application/pdf" }),
     );
-    const uploadSection = screen
-      .getByRole("heading", { name: "Upload study material" })
-      .closest("section") as HTMLElement;
-    const uploadButton = within(uploadSection).getByRole("button", {
+    const uploadButton = within(uploadDialog).getByRole("button", {
       name: "Upload study material",
     }) as HTMLButtonElement;
     await vi.waitFor(() => expect(uploadButton.disabled).toBe(false));

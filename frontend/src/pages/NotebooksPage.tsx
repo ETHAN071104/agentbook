@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from "react";
 import {
+  ArrowUpDown,
+  CalendarDays,
   FilePlus2,
   FileText,
   FolderInput,
+  FolderOpen,
   NotebookTabs,
   Pencil,
   Plus,
@@ -31,7 +34,6 @@ import {
   LoadingState,
   Notice,
   PageHeader,
-  SectionHeader,
 } from "../components";
 import { useApiQuery, useAsyncAction } from "../hooks";
 
@@ -50,6 +52,8 @@ interface AssignDocumentArgs {
   notebookId: PublicId | null;
 }
 
+type LibrarySort = "newest" | "oldest" | "name";
+
 function notebookValue(notebookId: PublicId | null) {
   return notebookId == null ? "unsorted" : String(notebookId);
 }
@@ -58,10 +62,23 @@ function parseNotebookValue(value: string) {
   return value === "unsorted" ? null : value;
 }
 
+function formatAddedDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 export function NotebooksPage() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [selectedNotebookId, setSelectedNotebookId] = useState("unsorted");
+  const [sort, setSort] = useState<LibrarySort>("newest");
   const [createName, setCreateName] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [editNotebook, setEditNotebook] = useState<Notebook | null>(null);
@@ -70,10 +87,8 @@ export function NotebooksPage() {
   const [deleteNotebook, setDeleteNotebook] = useState<Notebook | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
-  const [uploadNotebookId, setUploadNotebookId] = useState<string>("unsorted");
-  const [assignmentDrafts, setAssignmentDrafts] = useState<
-    Record<PublicId, string>
-  >({});
+  const [uploadNotebookId, setUploadNotebookId] = useState("unsorted");
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<PublicId, string>>({});
 
   const notebooks = useApiQuery(["notebooks", search], (signal) =>
     api.listNotebooks(search || undefined, { signal }),
@@ -86,8 +101,7 @@ export function NotebooksPage() {
   );
 
   const createAction = useAsyncAction(
-    (payload: NotebookCreate, signal: AbortSignal) =>
-    api.createNotebook(payload, { signal }),
+    (payload: NotebookCreate, signal: AbortSignal) => api.createNotebook(payload, { signal }),
   );
   const updateAction = useAsyncAction(
     ({ id, payload }: UpdateNotebookArgs, signal: AbortSignal) =>
@@ -124,10 +138,11 @@ export function NotebooksPage() {
       setCreateName("");
       setCreateDescription("");
       setCreateOpen(false);
+      setSelectedNotebookId(String(created.id));
       notebooks.reload();
       notebookOptions.reload();
     } catch {
-      // Dialog and controlled values remain available for correction.
+      // Keep the dialog and values available for correction.
     }
   }
 
@@ -137,17 +152,14 @@ export function NotebooksPage() {
     try {
       const updated = await updateAction.run({
         id: editNotebook.id,
-        payload: {
-          name: editName.trim(),
-          description: editDescription.trim(),
-        },
+        payload: { name: editName.trim(), description: editDescription.trim() },
       });
       if (!updated) return;
       setEditNotebook(null);
       notebooks.reload();
       notebookOptions.reload();
     } catch {
-      // Keep edit form open with user input intact.
+      // Keep the edit form open with user input intact.
     }
   }
 
@@ -156,10 +168,11 @@ export function NotebooksPage() {
     try {
       const deleted = await deleteAction.run(deleteNotebook.id);
       if (!deleted) return;
+      if (selectedNotebookId === String(deleteNotebook.id)) setSelectedNotebookId("unsorted");
       setDeleteNotebook(null);
       reloadLibrary();
     } catch {
-      // Confirmation stays open and exposes backend reason.
+      // Confirmation remains open and exposes the backend reason.
     }
   }
 
@@ -174,6 +187,8 @@ export function NotebooksPage() {
       if (!result) return;
       setFile(null);
       setFileInputKey((value) => value + 1);
+      setSelectedNotebookId(uploadNotebookId);
+      setUploadOpen(false);
       reloadLibrary();
     } catch {
       // Selected file and target notebook remain set for retry.
@@ -181,8 +196,7 @@ export function NotebooksPage() {
   }
 
   async function handleAssignment(document: DocumentRecord) {
-    const draft =
-      assignmentDrafts[document.id] ?? notebookValue(document.notebook_id);
+    const draft = assignmentDrafts[document.id] ?? notebookValue(document.notebook_id);
     try {
       const updated = await assignAction.run({
         documentId: document.id,
@@ -201,7 +215,7 @@ export function NotebooksPage() {
   }
 
   if (notebooks.isLoading && !notebooks.data) {
-    return <LoadingState message="Loading your Library…" />;
+    return <LoadingState message="Loading your Library..." />;
   }
 
   if (notebooks.error && !notebooks.data) {
@@ -219,33 +233,46 @@ export function NotebooksPage() {
   const notebookItems = notebooks.data.items;
   const assignmentNotebooks = notebookOptions.data?.items ?? notebookItems;
   const documentItems = documents.data?.items ?? [];
-  const documentGroups = [
-    {
-      id: "unsorted",
-      name: "Unsorted",
-      documents: documentItems.filter((document) => document.notebook_id == null),
-    },
-    ...assignmentNotebooks.map((notebook) => ({
-      id: String(notebook.id),
-      name: notebook.name,
-      documents: documentItems.filter(
-        (document) => document.notebook_id === notebook.id,
-      ),
-    })),
-  ].filter((group) => group.documents.length > 0);
+  const selectedNotebook = assignmentNotebooks.find(
+    (notebook) => String(notebook.id) === selectedNotebookId,
+  );
+  const selectedNotebookName = selectedNotebookId === "all"
+    ? "All material"
+    : selectedNotebookId === "unsorted"
+      ? "Unsorted"
+      : selectedNotebook?.name ?? "Notebook";
+  const selectedDocuments = documentItems
+    .filter((document) => {
+      if (selectedNotebookId === "all") return true;
+      if (selectedNotebookId === "unsorted") return document.notebook_id == null;
+      return String(document.notebook_id) === selectedNotebookId;
+    })
+    .sort((left, right) => {
+      if (sort === "name") return left.filename.localeCompare(right.filename);
+      const delta = Date.parse(left.created_at) - Date.parse(right.created_at);
+      return sort === "oldest" ? delta : -delta;
+    });
 
   return (
-    <div className="page-stack library-page">
+    <div className="page-stack library-page library-page--workspace">
       <PageHeader
         eyebrow="Your material"
-        title="Library"
-        description="Upload study material first. Notebooks help organize it, but you can use them later."
+        title="My Library"
+        description="Find, organize, and study everything you have added to Agentbook."
         actions={
           <div className="button-group">
-            <Link className="button button--primary" to="#upload">
+            <a
+              className="button button--primary"
+              href="#upload"
+              onClick={(event) => {
+                event.preventDefault();
+                uploadAction.reset();
+                setUploadOpen(true);
+              }}
+            >
               <FilePlus2 size={18} aria-hidden="true" />
               <span>Upload study material</span>
-            </Link>
+            </a>
             <Button
               variant="secondary"
               icon={<Plus size={18} aria-hidden="true" />}
@@ -261,84 +288,123 @@ export function NotebooksPage() {
       />
 
       <form
-        className="search-form library-search"
+        className="search-form library-search library-global-search"
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
           setSearch(searchInput.trim());
         }}
       >
-        <label htmlFor="library-search">Search your Library</label>
+        <label className="visually-hidden" htmlFor="library-search">Search your Library</label>
         <div className="search-form__controls">
-          <input
-            id="library-search"
-            type="search"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Search material or notebooks"
-            maxLength={255}
-          />
-          <Button
-            variant="secondary"
-            type="submit"
-            icon={<Search size={18} aria-hidden="true" />}
-          >
-            Search
-          </Button>
+          <div className="library-search-field">
+            <Search size={20} aria-hidden="true" />
+            <input
+              id="library-search"
+              type="search"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Search notebooks and materials..."
+              maxLength={255}
+            />
+          </div>
+          <Button variant="secondary" type="submit">Search</Button>
         </div>
       </form>
 
-      <section className="page-section library-notebooks">
-        <SectionHeader
-          title="Organize with notebooks"
-          description="Notebooks are optional. Unsorted works like any other group."
-        />
-
-        {notebooks.isRefreshing ? (
-          <LoadingState compact message="Refreshing notebooks…" />
-        ) : null}
-
-        <div className="library-grid">
-          <Card tone="muted" className="notebook-card">
-            <div className="notebook-card__icon" aria-hidden="true">
-              <FolderInput />
+      {uploadAction.data ? (
+        <Notice
+          tone={uploadAction.data.duplicate ? "warning" : "success"}
+          title={uploadAction.data.duplicate ? "Material already exists" : "Material is ready"}
+        >
+          <div className="upload-success library-upload-success">
+            <p>
+              {uploadAction.data.document.filename}
+              {uploadAction.data.duplicate
+                ? " is already in your Library."
+                : " was uploaded successfully."}
+            </p>
+            <div className="button-group">
+              <Link className="text-link" to="/chat">Ask about this</Link>
+              <Link
+                className="text-link"
+                to={`/study-actions?view=quiz&document_ids=${uploadAction.data.document.id}&scope_name=${encodeURIComponent(uploadAction.data.document.filename)}`}
+              >
+                Practice this
+              </Link>
             </div>
-            <div className="notebook-card__body">
-              <div className="notebook-card__heading">
-                <h3>
-                  <Link to="/notebooks/unsorted">
-                    Unsorted
+          </div>
+        </Notice>
+      ) : null}
+
+      <div className="library-workspace">
+        <aside className="library-browser" aria-label="Notebooks">
+          <div className="library-browser__header">
+            <div>
+              <p className="eyebrow">Collections</p>
+              <h2>Notebooks</h2>
+            </div>
+            <Badge tone="neutral">{notebookItems.length + 1}</Badge>
+          </div>
+
+          {notebooks.isRefreshing ? <LoadingState compact message="Refreshing notebooks..." /> : null}
+
+          <div className="library-notebook-list">
+            <div className={selectedNotebookId === "all" ? "library-notebook-item is-active" : "library-notebook-item"}>
+              <button
+                type="button"
+                className="library-notebook-select"
+                aria-pressed={selectedNotebookId === "all"}
+                onClick={() => setSelectedNotebookId("all")}
+              >
+                <span className="library-notebook-icon" aria-hidden="true"><NotebookTabs size={20} /></span>
+                <span><strong>All material</strong><small>{documentItems.length} sources</small></span>
+              </button>
+            </div>
+
+            <div className={selectedNotebookId === "unsorted" ? "library-notebook-item is-active" : "library-notebook-item"}>
+              <button
+                type="button"
+                className="library-notebook-select"
+                aria-pressed={selectedNotebookId === "unsorted"}
+                onClick={() => setSelectedNotebookId("unsorted")}
+              >
+                <span className="library-notebook-icon" aria-hidden="true"><FolderInput size={20} /></span>
+                <span>
+                  <strong>Unsorted</strong>
+                  <small>{notebooks.data.unsorted.document_count} source{notebooks.data.unsorted.document_count === 1 ? "" : "s"}</small>
+                </span>
+              </button>
+              <Link className="icon-button library-notebook-action" to="/notebooks/unsorted" aria-label="Open Unsorted notebook">
+                <FolderOpen size={17} aria-hidden="true" />
+              </Link>
+            </div>
+
+            {notebookItems.map((notebook) => (
+              <div
+                key={notebook.id}
+                className={selectedNotebookId === String(notebook.id) ? "library-notebook-item is-active" : "library-notebook-item"}
+              >
+                <button
+                  type="button"
+                  className="library-notebook-select"
+                  aria-pressed={selectedNotebookId === String(notebook.id)}
+                  onClick={() => setSelectedNotebookId(String(notebook.id))}
+                >
+                  <span className="library-notebook-icon" aria-hidden="true"><NotebookTabs size={20} /></span>
+                  <span>
+                    <strong>{notebook.name}</strong>
+                    <small>{notebook.document_count} source{notebook.document_count === 1 ? "" : "s"}</small>
+                  </span>
+                </button>
+                <div className="library-notebook-actions">
+                  <Link className="icon-button" to={`/notebooks/${notebook.id}`} aria-label={`Open ${notebook.name} notebook`}>
+                    <FolderOpen size={16} aria-hidden="true" />
                   </Link>
-                </h3>
-                <Badge tone="neutral">
-                  {notebooks.data.unsorted.document_count} source
-                  {notebooks.data.unsorted.document_count === 1 ? "" : "s"}
-                </Badge>
-              </div>
-              <p>Material you have not placed in a notebook yet.</p>
-            </div>
-          </Card>
-
-          {notebookItems.map((notebook) => (
-            <Card key={notebook.id} className="notebook-card">
-              <div className="notebook-card__icon" aria-hidden="true">
-                <NotebookTabs />
-              </div>
-              <div className="notebook-card__body">
-                <div className="notebook-card__heading">
-                  <h3>
-                    <Link to={`/notebooks/${notebook.id}`}>{notebook.name}</Link>
-                  </h3>
-                  <Badge tone="primary">
-                    {notebook.document_count} document
-                    {notebook.document_count === 1 ? "" : "s"}
-                  </Badge>
-                </div>
-                <p>{notebook.description || "No description added."}</p>
-                <div className="button-group notebook-card__actions">
-                  <Button
-                    variant="ghost"
-                    icon={<Pencil size={17} aria-hidden="true" />}
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Edit ${notebook.name}`}
                     onClick={() => {
                       updateAction.reset();
                       setEditNotebook(notebook);
@@ -346,271 +412,195 @@ export function NotebooksPage() {
                       setEditDescription(notebook.description);
                     }}
                   >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    icon={<Trash2 size={17} aria-hidden="true" />}
+                    <Pencil size={16} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`Delete ${notebook.name}`}
                     disabled={notebook.document_count > 0}
-                    title={
-                      notebook.document_count > 0
-                        ? "Move or remove every document before deleting"
-                        : undefined
-                    }
+                    title={notebook.document_count > 0 ? "Move every document before deleting" : undefined}
                     onClick={() => {
                       deleteAction.reset();
                       setDeleteNotebook(notebook);
                     }}
                   >
-                    Delete
-                  </Button>
+                    <Trash2 size={16} aria-hidden="true" />
+                  </button>
                 </div>
               </div>
-            </Card>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        {notebookItems.length === 0 && search ? (
-          <EmptyState
-            title="No matching notebooks"
-            description={`No notebook matched “${search}”. Clear the search or create a new notebook.`}
-            action={
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setSearch("");
-                  setSearchInput("");
-                }}
-              >
-                Clear search
-              </Button>
-            }
-          />
-        ) : null}
-      </section>
-
-      <section id="upload" className="page-section">
-        <SectionHeader
-          title="Upload study material"
-          description="Add a PDF, text file, or presentation. You can organize it now or later."
-        />
-        <Card>
-          <form className="form-grid" onSubmit={handleUpload}>
-            <div className="field-stack form-grid__wide">
-              <label htmlFor="document-upload">Study material file</label>
-              <input
-                key={fileInputKey}
-                id="document-upload"
-                type="file"
-                accept=".pdf,.txt,.pptx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                required
-                onChange={(event) => {
-                  setFile(event.target.files?.[0] ?? null);
-                  uploadAction.reset();
-                }}
-                disabled={uploadAction.isPending}
-              />
-              <p className="field-help">
-                Files that are protected, empty, damaged, unsupported, or too
-                large cannot be added.
-              </p>
+          {notebookItems.length === 0 && search ? (
+            <div className="library-browser__empty">
+              <p>No notebooks matched “{search}”.</p>
+              <Button variant="ghost" onClick={() => { setSearch(""); setSearchInput(""); }}>Clear search</Button>
             </div>
-            <div className="field-stack">
-              <label htmlFor="upload-notebook">Destination</label>
-              <select
-                id="upload-notebook"
-                value={uploadNotebookId}
-                onChange={(event) => setUploadNotebookId(event.target.value)}
-                disabled={uploadAction.isPending}
-              >
-                <option value="unsorted">Unsorted</option>
-                {assignmentNotebooks.map((notebook) => (
-                  <option key={notebook.id} value={notebook.id ?? ""}>
-                    {notebook.name}
-                  </option>
-                ))}
+          ) : null}
+        </aside>
+
+        <section className="library-material-panel" aria-labelledby="library-material-title">
+          <div className="library-material-panel__header">
+            <div>
+              <p className="eyebrow">{selectedDocuments.length} source{selectedDocuments.length === 1 ? "" : "s"}</p>
+              <h2 id="library-material-title">{selectedNotebookName}</h2>
+            </div>
+            <label className="library-sort">
+              <ArrowUpDown size={17} aria-hidden="true" />
+              <span className="visually-hidden">Sort material</span>
+              <select value={sort} onChange={(event) => setSort(event.target.value as LibrarySort)}>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="name">Name</option>
               </select>
+            </label>
+          </div>
+
+          {documents.isLoading && !documents.data ? (
+            <LoadingState message="Loading study material..." />
+          ) : documents.error && !documents.data ? (
+            <ErrorState
+              title="Study material is unavailable"
+              message={getErrorMessage(documents.error)}
+              onRetry={documents.retry}
+            />
+          ) : selectedDocuments.length ? (
+            <div className="library-document-list">
+              {selectedDocuments.map((document) => {
+                const actualValue = notebookValue(document.notebook_id);
+                const draftValue = assignmentDrafts[document.id] ?? actualValue;
+                return (
+                  <Card key={document.id} padding="small" className="library-document-card">
+                    <div className="library-document-main">
+                      <span className="library-document-icon" aria-hidden="true"><FileText size={22} /></span>
+                      <div className="library-document-copy">
+                        <h3><Link to={`/documents/${document.id}`}>{document.filename}</Link></h3>
+                        <div className="library-document-meta">
+                          <span>Ready to study</span>
+                          <span><CalendarDays size={14} aria-hidden="true" /> Added {formatAddedDate(document.created_at)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="library-document-actions">
+                      <Link className="button button--secondary" to="/chat">Ask Agentbook</Link>
+                      <Link
+                        className="button button--secondary"
+                        to={`/study-actions?view=quiz&document_ids=${document.id}&scope_name=${encodeURIComponent(document.filename)}`}
+                      >
+                        Practice
+                      </Link>
+                      <Link className="button button--ghost" to={`/documents/${document.id}`}>Details</Link>
+                    </div>
+
+                    <div className="library-document-move">
+                      <label htmlFor={`assignment-${document.id}`}>Move to</label>
+                      <select
+                        id={`assignment-${document.id}`}
+                        value={draftValue}
+                        disabled={assignAction.isPending}
+                        onChange={(event) => setAssignmentDrafts((current) => ({ ...current, [document.id]: event.target.value }))}
+                      >
+                        <option value="unsorted">Unsorted</option>
+                        {assignmentNotebooks.map((notebook) => (
+                          <option key={notebook.id} value={notebook.id ?? ""}>{notebook.name}</option>
+                        ))}
+                      </select>
+                      {draftValue !== actualValue ? (
+                        <Button
+                          variant="secondary"
+                          icon={<FolderInput size={17} aria-hidden="true" />}
+                          disabled={assignAction.isPending}
+                          onClick={() => void handleAssignment(document)}
+                        >
+                          Save move
+                        </Button>
+                      ) : null}
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
-            <div className="form-actions">
-              <Button
-                type="submit"
-                loading={uploadAction.isPending}
-                loadingText="Preparing material..."
-                icon={<FilePlus2 size={18} aria-hidden="true" />}
-                disabled={!file}
-              >
-                Upload study material
-              </Button>
-            </div>
-          </form>
+          ) : (
+            <EmptyState
+              title={search ? "No matching material" : `No material in ${selectedNotebookName}`}
+              description={search ? `No material matched “${search}”.` : "Upload a source or choose another notebook."}
+              icon={<NotebookTabs />}
+              action={
+                <Button icon={<FilePlus2 size={18} aria-hidden="true" />} onClick={() => setUploadOpen(true)}>
+                  Upload material
+                </Button>
+              }
+            />
+          )}
+
+          {assignAction.error ? (
+            <Notice tone="error" title="Material was not moved">
+              {getErrorMessage(assignAction.error)} Your selected destination is preserved.
+            </Notice>
+          ) : null}
+        </section>
+      </div>
+
+      <Dialog
+        open={uploadOpen}
+        onClose={() => {
+          if (!uploadAction.isPending) setUploadOpen(false);
+        }}
+        title="Upload study material"
+        description="Add a PDF, text file, or presentation and choose where it belongs."
+      >
+        <form id="upload" className="library-upload-form" onSubmit={handleUpload}>
+          <div className="field-stack">
+            <label htmlFor="document-upload">Study material file</label>
+            <input
+              key={fileInputKey}
+              id="document-upload"
+              type="file"
+              accept=".pdf,.txt,.pptx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              required
+              onChange={(event) => {
+                setFile(event.target.files?.[0] ?? null);
+                uploadAction.reset();
+              }}
+              disabled={uploadAction.isPending}
+            />
+            <p className="field-help">Protected, empty, damaged, unsupported, or oversized files cannot be added.</p>
+          </div>
+          <div className="field-stack">
+            <label htmlFor="upload-notebook">Destination</label>
+            <select
+              id="upload-notebook"
+              value={uploadNotebookId}
+              onChange={(event) => setUploadNotebookId(event.target.value)}
+              disabled={uploadAction.isPending}
+            >
+              <option value="unsorted">Unsorted</option>
+              {assignmentNotebooks.map((notebook) => (
+                <option key={notebook.id} value={notebook.id ?? ""}>{notebook.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-actions library-upload-form__actions">
+            <Button variant="ghost" onClick={() => setUploadOpen(false)} disabled={uploadAction.isPending}>Cancel</Button>
+            <Button
+              type="submit"
+              loading={uploadAction.isPending}
+              loadingText="Preparing material..."
+              icon={<FilePlus2 size={18} aria-hidden="true" />}
+              disabled={!file}
+            >
+              Upload study material
+            </Button>
+          </div>
           {uploadAction.error ? (
             <Notice tone="error" title="Upload failed">
               {getErrorMessage(uploadAction.error)} Choose another file or retry.
             </Notice>
           ) : null}
-          {uploadAction.data ? (
-            <Notice
-              tone={uploadAction.data.duplicate ? "warning" : "success"}
-              title={
-                uploadAction.data.duplicate
-                  ? "Material already exists"
-                  : "Material is ready"
-              }
-            >
-              <div className="upload-success">
-                <p>
-                  {uploadAction.data.document.filename}
-                  {uploadAction.data.duplicate
-                    ? " is already in your Library."
-                    : " is ready to study."}
-                </p>
-                <div className="button-group">
-                  <Link className="button button--secondary" to="/chat">
-                    Ask about this
-                  </Link>
-                  <Link
-                    className="button button--primary"
-                    to={`/study-actions?view=quiz&document_ids=${
-                      uploadAction.data.document.id
-                    }&scope_name=${encodeURIComponent(
-                      uploadAction.data.document.filename,
-                    )}`}
-                  >
-                    Practice this
-                  </Link>
-                </div>
-              </div>
-            </Notice>
-          ) : null}
-        </Card>
-      </section>
-
-      <section className="page-section library-material">
-        <SectionHeader
-          title="Study material"
-          description="Choose a source to ask a question, practise, or manage its organization."
-        />
-
-        {documents.isLoading && !documents.data ? (
-          <LoadingState message="Loading study material..." />
-        ) : documents.error && !documents.data ? (
-          <ErrorState
-            title="Study material is unavailable"
-            message={getErrorMessage(documents.error)}
-            onRetry={documents.retry}
-          />
-        ) : documentGroups.length ? (
-          <div className="library-groups">
-            {documentGroups.map((group) => (
-              <section
-                key={group.id}
-                className="library-group"
-                aria-labelledby={`library-group-${group.id}`}
-              >
-                <h3 id={`library-group-${group.id}`}>{group.name}</h3>
-                <div className="document-list">
-                  {group.documents.map((document) => {
-                    const actualValue = notebookValue(document.notebook_id);
-                    const draftValue =
-                      assignmentDrafts[document.id] ?? actualValue;
-                    return (
-                      <Card key={document.id} padding="small">
-                        <div className="document-row library-source-row">
-                          <div className="document-row__identity">
-                            <FileText size={20} aria-hidden="true" />
-                            <div>
-                              <h4>
-                                <Link to={`/documents/${document.id}`}>
-                                  {document.filename}
-                                </Link>
-                              </h4>
-                              <p>Ready to study</p>
-                            </div>
-                          </div>
-                          <div className="library-source-row__actions">
-                            <Link
-                              className="button button--secondary"
-                              to="/chat"
-                            >
-                              Ask about this
-                            </Link>
-                            <Link
-                              className="button button--primary"
-                              to={`/study-actions?view=quiz&document_ids=${
-                                document.id
-                              }&scope_name=${encodeURIComponent(
-                                document.filename,
-                              )}`}
-                            >
-                              Practice this
-                            </Link>
-                          </div>
-                        </div>
-                        <details className="library-manage">
-                          <summary>Organize material</summary>
-                          <div className="document-row__assignment">
-                            <label htmlFor={`assignment-${document.id}`}>
-                              Notebook
-                            </label>
-                            <select
-                              id={`assignment-${document.id}`}
-                              value={draftValue}
-                              disabled={assignAction.isPending}
-                              onChange={(event) =>
-                                setAssignmentDrafts((current) => ({
-                                  ...current,
-                                  [document.id]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="unsorted">Unsorted</option>
-                              {assignmentNotebooks.map((notebook) => (
-                                <option
-                                  key={notebook.id}
-                                  value={notebook.id ?? ""}
-                                >
-                                  {notebook.name}
-                                </option>
-                              ))}
-                            </select>
-                            <Button
-                              variant="secondary"
-                              icon={<FolderInput size={17} aria-hidden="true" />}
-                              disabled={
-                                draftValue === actualValue ||
-                                assignAction.isPending
-                              }
-                              onClick={() => void handleAssignment(document)}
-                            >
-                              Save
-                            </Button>
-                          </div>
-                        </details>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title={search ? "No matching material" : "Your Library is empty"}
-            description={
-              search
-                ? `No material matched "${search}".`
-                : "Upload study material first. Notebooks are optional and can be used later."
-            }
-            icon={<FileText />}
-          />
-        )}
-
-        {assignAction.error ? (
-          <Notice tone="error" title="Assignment was not saved">
-            {getErrorMessage(assignAction.error)} Your selected destination is preserved.
-          </Notice>
-        ) : null}
-      </section>
+        </form>
+      </Dialog>
 
       <Dialog
         open={createOpen}
@@ -621,18 +611,12 @@ export function NotebooksPage() {
         description="Add a focused home for related study material."
         actions={
           <>
-            <Button
-              variant="ghost"
-              onClick={() => setCreateOpen(false)}
-              disabled={createAction.isPending}
-            >
-              Cancel
-            </Button>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={createAction.isPending}>Cancel</Button>
             <Button
               form="create-notebook-form"
               type="submit"
               loading={createAction.isPending}
-              loadingText="Creating…"
+              loadingText="Creating..."
               disabled={!createName.trim()}
             >
               Create notebook
@@ -645,10 +629,7 @@ export function NotebooksPage() {
           <input
             id="create-notebook-name"
             value={createName}
-            onChange={(event) => {
-              setCreateName(event.target.value);
-              createAction.reset();
-            }}
+            onChange={(event) => { setCreateName(event.target.value); createAction.reset(); }}
             disabled={createAction.isPending}
             maxLength={120}
             required
@@ -658,17 +639,12 @@ export function NotebooksPage() {
           <textarea
             id="create-notebook-description"
             value={createDescription}
-            onChange={(event) => {
-              setCreateDescription(event.target.value);
-              createAction.reset();
-            }}
+            onChange={(event) => { setCreateDescription(event.target.value); createAction.reset(); }}
             disabled={createAction.isPending}
             maxLength={1000}
             rows={4}
           />
-          {createAction.error ? (
-            <Notice tone="error">{getErrorMessage(createAction.error)}</Notice>
-          ) : null}
+          {createAction.error ? <Notice tone="error">{getErrorMessage(createAction.error)}</Notice> : null}
         </form>
       </Dialog>
 
@@ -680,18 +656,12 @@ export function NotebooksPage() {
         title="Edit notebook"
         actions={
           <>
-            <Button
-              variant="ghost"
-              onClick={() => setEditNotebook(null)}
-              disabled={updateAction.isPending}
-            >
-              Cancel
-            </Button>
+            <Button variant="ghost" onClick={() => setEditNotebook(null)} disabled={updateAction.isPending}>Cancel</Button>
             <Button
               form="edit-notebook-form"
               type="submit"
               loading={updateAction.isPending}
-              loadingText="Saving…"
+              loadingText="Saving..."
               disabled={!editName.trim()}
             >
               Save changes
@@ -704,10 +674,7 @@ export function NotebooksPage() {
           <input
             id="edit-notebook-name"
             value={editName}
-            onChange={(event) => {
-              setEditName(event.target.value);
-              updateAction.reset();
-            }}
+            onChange={(event) => { setEditName(event.target.value); updateAction.reset(); }}
             disabled={updateAction.isPending}
             maxLength={120}
             required
@@ -716,17 +683,12 @@ export function NotebooksPage() {
           <textarea
             id="edit-notebook-description"
             value={editDescription}
-            onChange={(event) => {
-              setEditDescription(event.target.value);
-              updateAction.reset();
-            }}
+            onChange={(event) => { setEditDescription(event.target.value); updateAction.reset(); }}
             disabled={updateAction.isPending}
             maxLength={1000}
             rows={4}
           />
-          {updateAction.error ? (
-            <Notice tone="error">{getErrorMessage(updateAction.error)}</Notice>
-          ) : null}
+          {updateAction.error ? <Notice tone="error">{getErrorMessage(updateAction.error)}</Notice> : null}
         </form>
       </Dialog>
 
@@ -739,11 +701,8 @@ export function NotebooksPage() {
         title="Delete empty notebook?"
         description={
           <>
-            <strong>{deleteNotebook?.name}</strong> will be removed. Documents are
-            never deleted through this action.
-            {deleteAction.error ? (
-              <Notice tone="error">{getErrorMessage(deleteAction.error)}</Notice>
-            ) : null}
+            <strong>{deleteNotebook?.name}</strong> will be removed. Documents are never deleted through this action.
+            {deleteAction.error ? <Notice tone="error">{getErrorMessage(deleteAction.error)}</Notice> : null}
           </>
         }
         confirmLabel="Delete notebook"
