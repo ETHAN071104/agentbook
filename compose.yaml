@@ -1,0 +1,37 @@
+name: agentbook
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+    env_file:
+      - .env.production
+    expose:
+      - "8000"
+    volumes:
+      - huggingface_cache:/home/appuser/.cache/huggingface
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  huggingface_cache:
+  caddy_data:
+  caddy_config:
