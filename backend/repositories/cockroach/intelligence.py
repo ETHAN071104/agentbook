@@ -265,7 +265,8 @@ class CockroachIntelligenceRepository:
         search = str(filters.get("search") or "").strip()
         if search:
             clauses.append("(t.name ILIKE :search OR t.description ILIKE :search)")
-            parameters["search"] = f"%{search.replace('%', r'\%').replace('_', r'\_')}%"
+            escaped_search = search.replace("%", r"\%").replace("_", r"\_")
+            parameters["search"] = f"%{escaped_search}%"
         return self._load_topics(" AND ".join(clauses) or "true", parameters)
 
     def _load_topics(self, clause: str, parameters: dict[str, object]) -> list[Topic]:
