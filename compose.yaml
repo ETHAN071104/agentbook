@@ -11,6 +11,7 @@ services:
       - "8000"
     volumes:
       - huggingface_cache:/home/appuser/.cache/huggingface
+      - ./secrets/cockroach/root.crt:/certs/cockroach/root.crt:ro
     restart: unless-stopped
 
   web:
