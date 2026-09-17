@@ -29,6 +29,7 @@ frontend/coverage/
 *.tsbuildinfo
 
 # Local Study Companion runtime data
+backups/
 data/*.db
 data/*.db-journal
 data/*.db-shm
