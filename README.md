@@ -17,7 +17,7 @@
   <a href="#how-cockroachdb-is-used">CockroachDB</a> |
   <a href="#local-setup">Local setup</a> |
   <a href="#testing">Testing</a> |
-  <a href="https://github.com/thamkaile/Agentbook">Repository</a> |
+  <a href="https://github.com/ETHAN071104/agentbook">Repository</a> |
   <a href="#license">License</a>
 </p>
 

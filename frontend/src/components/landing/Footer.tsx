@@ -9,7 +9,7 @@ export function Footer() {
           &copy; 2026 Agentbook. Built for focused learning.
         </p>
         <a
-          href="https://github.com/thamkaile/Agentbook"
+          href="https://github.com/ETHAN071104/agentbook"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-full border border-royal/15 bg-white px-5 py-2 text-sm font-semibold text-slate-700 shadow-clay-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-royal/30 hover:text-royal dark:border-dark-border dark:bg-dark-card dark:text-dark-text dark:hover:text-royal"
